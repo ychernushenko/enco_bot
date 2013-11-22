@@ -4,11 +4,17 @@ Servo servoLeft, servoRight;
 
 //Interface
 // Don't use this pins: 4, 7, 10, 11, 12, 13
-const int pingPin = 9;
-const int RED_PIN = 1;
-const int GREEN_PIN = 8;
-const int BLUE_PIN = 3;
+const int SERVO_RIGHT_PIN = 5;
+const int SERVO_LEFT_PIN = 6;
+
+const int PING_PIN = 9;
 const int SWITCH_PIN = 2;
+const int RED_PIN = 1;
+const int BLUE_PIN = 3;
+const int GREEN_PIN = 8;
+const int RIGHT_QTI_PIN = 17;
+const int MIDDLE_QTI_PIN = 18;
+const int LEFT_QTI_PIN = 19;
 
 const int STATE_PRE_START = -1;
 const int STATE_SEARCHING = 0;
@@ -18,15 +24,20 @@ const int STATE_DOCKED = 3;
 const int STATE_TURNED = 4;
 const int STATE_HOME = 5;
 
+// These are the values, when we assume that underneath a QTI sensor is a black surface.
+const int BOUNDARY_QTI_THRESHOLD = 6000;
+const int MIDDLE_QTI_THRESHOLD = 15000;
+
 int state;
 unsigned long start_time, end_time;
 unsigned long time_delta = 0;
 
+// Initial ENCO BOT setup
 void setup() {
   state = STATE_SEARCHING;
   Serial.begin(9600);
-  servoLeft.attach(6);
-  servoRight.attach(5);
+  servoLeft.attach(SERVO_LEFT_PIN);
+  servoRight.attach(SERVO_RIGHT_PIN);
   halt();
   
   //Set LED pins
@@ -37,8 +48,9 @@ void setup() {
   attachInterrupt(0, switchInterrupt, CHANGE);
 }
 
-
+// Interrupt on press/release the switch
 void switchInterrupt(){
+  Serial.println("Interrupt!");
   if (state==STATE_FOUND){
     end_time = millis();
     time_delta = end_time - start_time;
@@ -48,25 +60,16 @@ void switchInterrupt(){
     state = STATE_DOCKED;
     halt();
   }
+  else if (state==STATE_HOME){
+    scanningTurnLeft();
+    delay(4000); // SHOULD BE CALIBRATED
+    halt();
+    state = STATE_SEARCHING;
+  }
 }
 
 void goForward(){
   servoLeft.write(180);
-  servoRight.write(0);
-}
-
-void goBackward(){
-  servoLeft.write(0);
-  servoRight.write(180);
-}
-
-void turnRight(){
-  servoLeft.write(180);
-  servoRight.write(180);
-}
-
-void turnLeft(){
-  servoLeft.write(0);
   servoRight.write(0);
 }
 
@@ -85,7 +88,7 @@ void halt(){
   servoRight.write(90);
 }
 
-//returns distance to an object in cm, Code was taken here http://arduino.cc/en/Tutorial/Ping?from=Tutorial.UltrasoundSensor
+// returns distance to an object in cm, Code was taken here http://arduino.cc/en/Tutorial/Ping?from=Tutorial.UltrasoundSensor
 int pingTarget() {
   Serial.print("Ping:");
   Serial.println();
@@ -94,19 +97,18 @@ int pingTarget() {
   
   // The PING))) is triggered by a HIGH pulse of 2 or more microseconds.
   // Give a short LOW pulse beforehand to ensure a clean HIGH pulse:
-  pinMode(pingPin, OUTPUT);
-  pinMode(pingPin, OUTPUT);
-  digitalWrite(pingPin, LOW);
+  pinMode(PING_PIN, OUTPUT);
+  digitalWrite(PING_PIN, LOW);
   delayMicroseconds(2);
-  digitalWrite(pingPin, HIGH);
+  digitalWrite(PING_PIN, HIGH);
   delayMicroseconds(5);
-  digitalWrite(pingPin, LOW);
+  digitalWrite(PING_PIN, LOW);
 
   // The same pin is used to read the signal from the PING))): a HIGH
   // pulse whose duration is the time (in microseconds) from the sending
   // of the ping to the reception of its echo off of an object.
-  pinMode(pingPin, INPUT);
-  duration = pulseIn(pingPin, HIGH);
+  pinMode(PING_PIN, INPUT);
+  duration = pulseIn(PING_PIN, HIGH);
   cm = microsecondsToCentimeters(duration);
 
   Serial.print(cm);
@@ -153,34 +155,6 @@ void setPURPLE_LED() {
   digitalWrite(BLUE_PIN, HIGH);
 }
 
-
-void stepForward(){
-  servoLeft.write(180);
-  servoRight.write(0);
-  delay(2000); //SHOULD BE CALIBRATED
-}
-
-void stepBackward(){
-  servoLeft.write(0);
-  servoRight.write(180);
-  delay(2000); //SHOULD BE CALIBRATED
-  halt();
-}
-
-void stepRight(){
-  servoLeft.write(180);
-  servoRight.write(85);
-  delay(500); //SHOULD BE CALIBRATED
-  halt();
-}
-
-void stepLeft(){
-  servoLeft.write(95);
-  servoRight.write(0);
-  delay(500); //SHOULD BE CALIBRATED
-  halt();
-}
-
 void scanningTurnRight(){
   servoLeft.write(93);
   servoRight.write(93);
@@ -191,20 +165,7 @@ void scanningTurnLeft(){
   servoRight.write(87);
 }
 
-void turnStepRight(){
-  servoLeft.write(95);
-  servoRight.write(95);
-  delay(100); //SHOULD BE CALIBRATED
-  halt();
-}
-
-void turnStepLeft(){
-  servoLeft.write(0);
-  servoRight.write(0);
-  delay(100); //SHOULD BE CALIBRATED
-  halt();
-}
-
+// Going forward
 void goToTarget() {
   Serial.print("Going to target");
   Serial.println();
@@ -214,52 +175,54 @@ void goToTarget() {
 }
 
 
-void findTarget(){
-  Serial.print("Scanning for Target");
-  Serial.println();
+// Going forward v2
+void goToTarget2() {
+  Serial.println("Going to target");
+  setPURPLE_LED();
+  goForward();
+  int initialDistance = pingTarget();
+  int distance = initialDistance;
+  Serial.println("Distance to target = " + distance);
+  int numberOfOuts = 0;
+  int oneSideCycle = 10; // SHOULD BE CALIBRATED
+  int outCycle = 0;
+  boolean goesRight = false;
   
-  setRED_LED();
-  halt();
-  
-  int searchStatus = 0; //0 - not found, 1 - found
-  int minDistance = 3; //cm SHOULD BE CALIBRATED
-  int maxDistance = 50; //cm SHOULD BE CALIBRATED
-  int targetDistance = maxDistance;
-  int searchLoop = 3;
-  while((searchLoop > 0) && (searchStatus == 0)) {
-    targetDistance = pingTarget();
-    
-    if (targetDistance < minDistance) {
-      //do something
-      Serial.print("Target is too close");
-      Serial.println();
-    }
-    else if(targetDistance < maxDistance) {
-      searchStatus = 1;
-      Serial.print("Target found");
-      Serial.println();
-      setGREEN_LED();
-      delay(2000); // SHOULD BE DELETED
-      goToTarget();
+  while (distance>10) {
+    int newDistance = pingTarget();
+    Serial.println("New distance to target = " + newDistance);
+    if (newDistance > distance + 2){
+      Serial.println("Out");
+      numberOfOuts++;
+      if (numberOfOuts>3){
+        
+        Serial.println("Out of way");
+        // SHOULD BE CALIBRATED
+        outCycle ++;
+        if (outCycle>oneSideCycle){
+          goesRight = !goesRight;
+          oneSideCycle *= 2;
+        } 
+        if (goesRight){
+          goRight();
+        }
+        else {
+          goLeft();
+        }
+      }    
     }
     else {
-      searchLoop--; // Check if the target could not be found
-      turnStepRight();
-      delay(2000); // SHOULD BE CALIBRATED
-      Serial.print("Target not found, continue scanning");
-      Serial.println();
+      goForward();
+      numberOfOuts = 0;
+      outCycle = 0;
+      distance = newDistance;
     }
   }
-  
-  if (searchStatus == 0) {
-    Serial.print("Target not found. Go to pause regime");
-    Serial.println();
-    setBLUE_LED();
-    delay(2000); // SHOULD BE DELETED
-  }
+    
 }
 
-void findTarget2(){
+// Finding target using sonar
+void findTarget(){
   Serial.print("Scanning for Target");
   Serial.println();
   
@@ -317,16 +280,8 @@ void findTarget2(){
   }
 }
 
-void loop()
-{
-  if (state == STATE_SEARCHING) {
-    findTarget2();
-  }
-  else if (state == STATE_FOUND){
-    start_time = millis();
-    goToTarget();
-  }
-  else if (state == STATE_DOCKED){
+// Turning 180 degrees back home
+void turnHome(){
     for (int i=0; i<4; i++){
       goForward();
       delay(100);
@@ -335,11 +290,83 @@ void loop()
     }
     halt();
     state = STATE_TURNED;
+}
+
+// Return time http://learn.parallax.com/KickStart/555-27401
+long RCTime(int sensorIn){
+   long duration = 0;
+   pinMode(sensorIn, OUTPUT);     // Make pin OUTPUT
+   digitalWrite(sensorIn, HIGH);  // Pin HIGH (discharge capacitor)
+   delay(1);                      // Wait 1ms
+   pinMode(sensorIn, INPUT);      // Make pin INPUT
+   digitalWrite(sensorIn, LOW);   // Turn off internal pullups
+   while(digitalRead(sensorIn)){  // Wait for pin to go LOW
+      duration++;
+   }
+   return duration;
+}
+
+// Following the black line
+void followBlackLine()
+{  
+  int rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
+  int middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
+  int leftQtiRCTime = RCTime(LEFT_QTI_PIN);
+  
+  boolean isRightBlack = rightQtiRCTime > BOUNDARY_QTI_THRESHOLD;
+  boolean isMiddleBlack = middleQtiRCTime > MIDDLE_QTI_THRESHOLD;
+  boolean isLeftBlack = leftQtiRCTime > BOUNDARY_QTI_THRESHOLD;
+  
+  Serial.println("IR");
+  String message = String(rightQtiRCTime) + "; " + String(middleQtiRCTime) + "; " + String(leftQtiRCTime);
+  String message2 = String(isRightBlack) + "; " + String(isMiddleBlack) + "; " + String(isLeftBlack);
+  
+  Serial.println(message);
+  Serial.println(message2);
+  
+  if (isRightBlack && isMiddleBlack && isLeftBlack)
+  {
+    Serial.println("Stop");
+    servoLeft.write(90);
+    servoRight.write(90);
+    state = STATE_HOME;
+  } 
+  else if (isRightBlack && !isLeftBlack)
+  {
+    Serial.println("Right");  
+    servoLeft.write(93);
+    servoRight.write(90);
+  }
+  else if (!isRightBlack && isLeftBlack)
+  {
+    Serial.println("Left");
+    servoLeft.write(90);
+    servoRight.write(88);
+  }
+  else 
+  {
+    Serial.println("Forward");
+    servoLeft.write(94);
+    servoRight.write(86);
+  }
+  
+  delay(50);
+}
+
+void loop()
+{
+  if (state == STATE_SEARCHING) {
+    findTarget();
+  }
+  else if (state == STATE_FOUND){
+    start_time = millis();
+    goToTarget();
+    //goToTarget2();
+  }
+  else if (state == STATE_DOCKED){
+    turnHome();
   }
   else if (state == STATE_TURNED){
-    goForward();
-    delay(time_delta);
-    halt();
-    state = STATE_HOME;
+    followBlackLine();
   }
-} 
+}
