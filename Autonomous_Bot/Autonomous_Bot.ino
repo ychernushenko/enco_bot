@@ -25,8 +25,8 @@ const int STATE_TURNED = 4;
 const int STATE_HOME = 5;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
-const int BOUNDARY_QTI_THRESHOLD = 6000;
-const int MIDDLE_QTI_THRESHOLD = 15000;
+const int BOUNDARY_QTI_THRESHOLD = 1000;
+const int MIDDLE_QTI_THRESHOLD = 1000;
 
 int state;
 unsigned long start_time, end_time;
@@ -231,7 +231,7 @@ void findTarget(){
   
   int searchStatus = 0; //0 - not found, 1 - found
   int minDistance = 3; //cm SHOULD BE CALIBRATED
-  int maxDistance = 50; //cm SHOULD BE CALIBRATED
+  int maxDistance = 180; //cm SHOULD BE CALIBRATED
   int targetDistance = maxDistance;
   const int left = 0, right = 1, loopLength=20;
   int searchLoop = 100;
@@ -306,6 +306,9 @@ long RCTime(int sensorIn){
    return duration;
 }
 
+boolean leftWasBlack = false;
+boolean rightWasBlack = false;
+
 // Following the black line
 void followBlackLine()
 {  
@@ -317,37 +320,45 @@ void followBlackLine()
   boolean isMiddleBlack = middleQtiRCTime > MIDDLE_QTI_THRESHOLD;
   boolean isLeftBlack = leftQtiRCTime > BOUNDARY_QTI_THRESHOLD;
   
-  Serial.println("IR");
+  //Serial.println("IR");
+  //Serial.println(blackLineTurns);
   String message = String(rightQtiRCTime) + "; " + String(middleQtiRCTime) + "; " + String(leftQtiRCTime);
   String message2 = String(isRightBlack) + "; " + String(isMiddleBlack) + "; " + String(isLeftBlack);
+  Serial.println(String(leftWasBlack));
+  Serial.println(String(rightWasBlack));
   
   Serial.println(message);
   Serial.println(message2);
   
-  if (isRightBlack && isMiddleBlack && isLeftBlack)
+  if ((isRightBlack && isMiddleBlack && rightWasBlack && leftWasBlack)
+    ||(isLeftBlack && isMiddleBlack && rightWasBlack && leftWasBlack))
   {
     Serial.println("Stop");
     servoLeft.write(90);
     servoRight.write(90);
     state = STATE_HOME;
+    //rightWasBlack = false; 
+    //leftWasBlack = false;
   } 
   else if (isRightBlack && !isLeftBlack)
   {
     Serial.println("Right");  
-    servoLeft.write(93);
+    rightWasBlack = true;
+    servoLeft.write(180);
     servoRight.write(90);
   }
   else if (!isRightBlack && isLeftBlack)
   {
     Serial.println("Left");
+    leftWasBlack = true;
     servoLeft.write(90);
-    servoRight.write(88);
+    servoRight.write(0);
   }
   else 
   {
     Serial.println("Forward");
-    servoLeft.write(94);
-    servoRight.write(86);
+    servoLeft.write(180);
+    servoRight.write(0);
   }
   
   delay(50);
