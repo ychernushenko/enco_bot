@@ -6,7 +6,8 @@ Servo servoLeft, servoRight;
 char ssid[] = "CMU"; //  your network SSID (name) 
 
 int wifiStatus = WL_IDLE_STATUS;
-char server[] = "www.google.com";
+char server[] = "128.237.250.69";
+int port = 8000;
 String server_str(server);
 WiFiClient client;
 
@@ -40,54 +41,57 @@ int state;
 unsigned long start_time, end_time;
 unsigned long time_delta = 0;
 
-String debugInfo = "";
-
+// -------------------------------------------------------------------------------------
+// Block to define debugging
 boolean useSerial = false;
 
-void debug(char *message){
-  String messag_str(server);
-  
-  if (useSerial) {
-    Serial.println(message);
-  } 
-  else {
-    debugInfo += "<br>";
-    debugInfo += message;
-  }
-}  
+void debug(int message){
+  String msg = String(message);
+  debug(msg);
+}
 
+void debug(char* message){
+  String msg = String(message);
+  debug(msg);
+}
+
+void debug(String message){
+  if (useSerial){
+    Serial.println(message);
+  }
+  else {
+    client.println(message);
+    while (client.available()){
+      client.read();
+    }
+  }
+}
+
+// -------------------------------------------------------------------------------------
 // Initial ENCO BOT setup
 void setup() {
   Serial.begin(9600);
-
-  // check for the presence of the shield:
+  
+// check for the presence of the shield:
   if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present");
-    // don't continue:
+    Serial.println("WiFi shield not present"); 
     while(true);
-  }
-
-  // attempt to connect to Wifi network:
-  while (wifiStatus != WL_CONNECTED) {
-    Serial.print("Attempting to connect to SSID: ");
-    Serial.println(ssid);
-    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:    
-    wifiStatus = WiFi.begin(ssid);
-  }
-  Serial.println("Connected to wifi");
-  printWifiStatus();
-
-  Serial.println("\nStarting connection to server...");
-  // if you get a connection, report back via serial:
-  if (client.connect(server, 80)) {
-    Serial.println("connected to server");
-    // Make a HTTP request:
-    client.println("GET /search?q=arduino HTTP/1.1");
-    client.println("Host: "+server_str);
-    client.println("Connection: close");
-    client.println();
   } 
 
+  // attempt to connect to Wifi network:
+  while (wifiStatus != WL_CONNECTED) { 
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    wifiStatus = WiFi.begin(ssid);
+  }
+  
+  if (client.connect(server, port)){
+    Serial.println("Connection established");
+  } 
+  else {
+    Serial.println("Connection failed");  
+  }
+ 
   state = STATE_SEARCHING;
   servoLeft.attach(SERVO_LEFT_PIN);
   servoRight.attach(SERVO_RIGHT_PIN);
@@ -101,23 +105,16 @@ void setup() {
   attachInterrupt(0, switchInterrupt, CHANGE);
 }
 
+// -------------------------------------------------------------------------------------
 // Interrupt on press/release the switch
 void switchInterrupt(){
-  Serial.println("Interrupt!");
   if (state==STATE_FOUND){
+    state = STATE_DOCKED;
     end_time = millis();
     time_delta = end_time - start_time;
-    Serial.print("Time passed: ");
-    Serial.println(time_delta);
-    Serial.println();
-    state = STATE_DOCKED;
+    debug("Time passed:");
+    debug(time_delta);
     halt();
-  }
-  else if (state==STATE_HOME){
-    scanningTurnLeft();
-    delay(4000); // SHOULD BE CALIBRATED
-    halt();
-    state = STATE_SEARCHING;
   }
 }
 
@@ -143,8 +140,7 @@ void halt(){
 
 // returns distance to an object in cm, Code was taken here http://arduino.cc/en/Tutorial/Ping?from=Tutorial.UltrasoundSensor
 int pingTarget() {
-  Serial.print("Ping:");
-  Serial.println();
+  debug("Ping:");
 
   long duration, cm;
 
@@ -164,9 +160,7 @@ int pingTarget() {
   duration = pulseIn(PING_PIN, HIGH);
   cm = microsecondsToCentimeters(duration);
 
-  Serial.print(cm);
-  Serial.print("cm");
-  Serial.println();
+  debug(cm);
 
   delay(100); //MAKE ME FASTER
   return cm;
@@ -209,8 +203,8 @@ void setPURPLE_LED() {
 }
 
 void scanningTurnRight(){
-  servoLeft.write(93);
-  servoRight.write(93);
+  servoLeft.write(94);
+  servoRight.write(94);
 }
 
 void scanningTurnLeft(){
@@ -220,22 +214,21 @@ void scanningTurnLeft(){
 
 // Going forward
 void goToTarget() {
-  Serial.print("Going to target");
-  Serial.println();
+  debug("Going to target");
   setPURPLE_LED();
   goForward();
   delay(5000); //SHOULD BE CALIBRATED
 }
 
-
 // Going forward v2
 void goToTarget2() {
-  Serial.println("Going to target");
+  debug("Going to target");
   setPURPLE_LED();
   goForward();
   int initialDistance = pingTarget();
   int distance = initialDistance;
-  Serial.println("Distance to target = " + distance);
+  debug("Distance to target = ");
+  debug(distance);
   int numberOfOuts = 0;
   int oneSideCycle = 10; // SHOULD BE CALIBRATED
   int outCycle = 0;
@@ -243,13 +236,13 @@ void goToTarget2() {
 
   while (distance>10) {
     int newDistance = pingTarget();
-    Serial.println("New distance to target = " + newDistance);
+    debug("New distance to target = ");
+    debug(newDistance);
     if (newDistance > distance + 2){
-      Serial.println("Out");
+      debug("Out");
       numberOfOuts++;
       if (numberOfOuts>3){
-
-        Serial.println("Out of way");
+        debug("Out of way");
         // SHOULD BE CALIBRATED
         outCycle ++;
         if (outCycle>oneSideCycle){
@@ -265,19 +258,20 @@ void goToTarget2() {
       }    
     }
     else {
+      if (numberOfOuts > 3){
+        delay(500);
+      }
       goForward();
       numberOfOuts = 0;
       outCycle = 0;
       distance = newDistance;
     }
   }
-
 }
 
 // Finding target using sonar
 void findTarget(){
-  Serial.print("Scanning for Target");
-  Serial.println();
+  debug("Scanning for Target");
 
   setRED_LED();
   scanningTurnRight();
@@ -286,7 +280,7 @@ void findTarget(){
   int minDistance = 3; //cm SHOULD BE CALIBRATED
   int maxDistance = 180; //cm SHOULD BE CALIBRATED
   int targetDistance = maxDistance;
-  const int left = 0, right = 1, loopLength=20;
+  const int left = 0, right = 1, loopLength=15;
   int searchLoop = 100;
   int side = right;
   int iteration = 1;
@@ -311,23 +305,20 @@ void findTarget(){
 
     if(targetDistance < maxDistance) {
       searchStatus = 1;
-      Serial.print("Target found");
-      Serial.println();
+      debug("Target found");
       setGREEN_LED();
       state = STATE_FOUND;
     }
     else if (targetDistance < minDistance) {
       //do something
-      Serial.print("Target is too close");
-      Serial.println();
+      debug("Target is too close");
     }
     searchLoop--;
     delay(10);
   }
 
   if (searchStatus == 0) {
-    Serial.print("Target not found. Go to pause regime");
-    Serial.println();
+    debug("Target not found. Go to pause regime");
     setBLUE_LED();
     delay(2000); // SHOULD BE DELETED
   }
@@ -377,16 +368,16 @@ void followBlackLine()
   //Serial.println(blackLineTurns);
   String message = String(rightQtiRCTime) + "; " + String(middleQtiRCTime) + "; " + String(leftQtiRCTime);
   String message2 = String(isRightBlack) + "; " + String(isMiddleBlack) + "; " + String(isLeftBlack);
-  Serial.println(String(leftWasBlack));
-  Serial.println(String(rightWasBlack));
+  debug(String(leftWasBlack));
+  debug(String(rightWasBlack));
 
-  Serial.println(message);
-  Serial.println(message2);
+  debug(message);
+  debug(message2);
 
   if ((isRightBlack && isMiddleBlack && rightWasBlack && leftWasBlack)
     ||(isLeftBlack && isMiddleBlack && rightWasBlack && leftWasBlack))
   {
-    Serial.println("Stop");
+    debug("Stop");
     servoLeft.write(90);
     servoRight.write(90);
     state = STATE_HOME;
@@ -395,21 +386,21 @@ void followBlackLine()
   } 
   else if (isRightBlack && !isLeftBlack)
   {
-    Serial.println("Right");  
+    debug("Right");  
     rightWasBlack = true;
     servoLeft.write(180);
     servoRight.write(90);
   }
   else if (!isRightBlack && isLeftBlack)
   {
-    Serial.println("Left");
+    debug("Left");
     leftWasBlack = true;
     servoLeft.write(90);
     servoRight.write(0);
   }
   else 
   {
-    Serial.println("Forward");
+    debug("Forward");
     servoLeft.write(180);
     servoRight.write(0);
   }
@@ -419,32 +410,13 @@ void followBlackLine()
 
 void loop()
 {
-  // Wifi client copied from http://arduino.cc/en/Tutorial/WiFiWebClient
-  // if there are incoming bytes available
-  // from the server, read them and print them:
-  while (client.available()) {
-    char c = client.read();
-    Serial.write(c);
-  }
-
-  // if the server's disconnected, stop the client:
-  if (!client.connected()) {
-    Serial.println();
-    Serial.println("disconnecting from server.");
-    client.stop();
-
-    // do nothing forevermore:
-    //while(true);
-  }
-
-
   if (state == STATE_SEARCHING) {
     findTarget();
   }
   else if (state == STATE_FOUND){
     start_time = millis();
-    goToTarget();
-    //goToTarget2();
+    //goToTarget();
+    goToTarget2();
   }
   else if (state == STATE_DOCKED){
     turnHome();
@@ -453,23 +425,3 @@ void loop()
     followBlackLine();
   }
 }
-
-
-// Copied from http://arduino.cc/en/Tutorial/WiFiWebClient
-void printWifiStatus() {
-  // print the SSID of the network you're attached to:
-  Serial.print("SSID: ");
-  Serial.println(WiFi.SSID());
-
-  // print your WiFi shield's IP address:
-  IPAddress ip = WiFi.localIP();
-  Serial.print("IP Address: ");
-  Serial.println(ip);
-
-  // print the received signal strength:
-  long rssi = WiFi.RSSI();
-  Serial.print("signal strength (RSSI):");
-  Serial.print(rssi);
-  Serial.println(" dBm");
-}
-
