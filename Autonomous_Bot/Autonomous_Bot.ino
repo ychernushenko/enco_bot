@@ -6,7 +6,7 @@ Servo servoLeft, servoRight;
 char ssid[] = "CMU"; //  your network SSID (name) 
 
 int wifiStatus = WL_IDLE_STATUS;
-char server[] = "128.237.250.69";
+char server[] = "128.237.140.220";
 int port = 8000;
 String server_str(server);
 WiFiClient client;
@@ -43,7 +43,7 @@ unsigned long time_delta = 0;
 
 // -------------------------------------------------------------------------------------
 // Block to define debugging
-boolean useSerial = false;
+boolean useSerial = true;
 
 void debug(int message){
   String msg = String(message);
@@ -72,24 +72,26 @@ void debug(String message){
 void setup() {
   Serial.begin(9600);
   
-// check for the presence of the shield:
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present"); 
-    while(true);
-  } 
+  if (!useSerial){
+    // check for the presence of the shield:
+    if (WiFi.status() == WL_NO_SHIELD) {
+      Serial.println("WiFi shield not present"); 
+      while(true);
+    } 
 
-  // attempt to connect to Wifi network:
-  while (wifiStatus != WL_CONNECTED) { 
-    Serial.print("Attempting to connect to SSID: ");
-    Serial.println(ssid);
-    wifiStatus = WiFi.begin(ssid);
-  }
+    // attempt to connect to Wifi network:
+    while (wifiStatus != WL_CONNECTED) { 
+      Serial.print("Attempting to connect to SSID: ");
+      Serial.println(ssid);
+      wifiStatus = WiFi.begin(ssid);
+    }
   
-  if (client.connect(server, port)){
-    Serial.println("Connection established");
-  } 
-  else {
-    Serial.println("Connection failed");  
+    if (client.connect(server, port)){
+      Serial.println("Connection established");
+    } 
+    else {
+      Serial.println("Connection failed");  
+    }
   }
  
   state = STATE_SEARCHING;
@@ -230,7 +232,7 @@ void goToTarget2() {
   debug("Distance to target = ");
   debug(distance);
   int numberOfOuts = 0;
-  int oneSideCycle = 10; // SHOULD BE CALIBRATED
+  int oneSideCycle = 1; // SHOULD BE CALIBRATED
   int outCycle = 0;
   boolean goesRight = false;
 
@@ -258,9 +260,9 @@ void goToTarget2() {
       }    
     }
     else {
-      if (numberOfOuts > 3){
+      /*if (numberOfOuts > 3){  // WHAT IT IS FOR? (Yury)
         delay(500);
-      }
+      }*/
       goForward();
       numberOfOuts = 0;
       outCycle = 0;
@@ -303,15 +305,15 @@ void findTarget(){
 
     targetDistance = pingTarget();
 
-    if(targetDistance < maxDistance) {
+   if (targetDistance < minDistance) {
+      //do something
+      debug("Target is too close");
+    }
+    else if(targetDistance < maxDistance) {
       searchStatus = 1;
       debug("Target found");
       setGREEN_LED();
       state = STATE_FOUND;
-    }
-    else if (targetDistance < minDistance) {
-      //do something
-      debug("Target is too close");
     }
     searchLoop--;
     delay(10);
@@ -326,7 +328,7 @@ void findTarget(){
 
 // Turning 180 degrees back home
 void turnHome(){
-  for (int i=0; i<4; i++){
+  for (int i=0; i<6; i++){
     goForward();
     delay(100);
     scanningTurnLeft();
@@ -334,6 +336,7 @@ void turnHome(){
   }
   halt();
   state = STATE_TURNED;
+  Serial.println("Turn Finished");
 }
 
 // Return time http://learn.parallax.com/KickStart/555-27401
@@ -422,6 +425,7 @@ void loop()
     turnHome();
   }
   else if (state == STATE_TURNED){
+    Serial.println("Going Home");
     followBlackLine();
   }
 }
