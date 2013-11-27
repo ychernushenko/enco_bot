@@ -33,17 +33,14 @@ const int STATE_DOCKED = 3;
 const int STATE_TURNED = 4;
 const int STATE_HOME = 5;
 
-//Parameters for identifying the side
-int firstTurnFlag = 0;
-int rightSide = 0;
-int leftSide = 0;
+int turnUndock = 0;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
 const int BOUNDARY_QTI_THRESHOLD = 1000;
 const int MIDDLE_QTI_THRESHOLD = 1000;
 
 int state;
-unsigned long start_time, end_time;
+unsigned long start_time, end_time, startLineTime, endLineTime;
 unsigned long time_delta = 0;
 
 // -------------------------------------------------------------------------------------
@@ -130,9 +127,15 @@ int findTargetBaseFirstStep(){
   
   int turnCounter = 16;
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
-    if ((targetDistance = pingTarget()) <= maxDistance){
+    if (pingTarget() <= maxDistance){
       halt();
-      targetDistance = (pingTarget() + pingTarget() + pingTarget())/3;
+      int targetDistance1, targetDistance2, targetDistance3;
+      targetDistance1 = pingTarget();
+      targetDistance2 = pingTarget();
+      targetDistance3 = pingTarget();
+      if ((targetDistance1 <= maxDistance) && (targetDistance2 <= maxDistance) && (targetDistance3 <= maxDistance)) {
+        targetDistance = (pingTarget() + pingTarget() + pingTarget())/3;
+      }
       slowScanningTurnLeft();
     }
     Serial.println(targetDistance);
@@ -160,18 +163,18 @@ int findTargetBaseSecondStep(){
   debug("Scanning for Target from Base - Step 2");
   setRED_LED();
   
-  if(rightSide){
-    turnLeft(200);
-  }
-  else if(leftSide){
+  if(turnUndock>0){
     turnRight(200);
+  }
+  else if (turnUndock<0){
+    turnLeft(200);
   }
   
   goForwardFromBase(3800);
   
- if (!rescan(650, 25)) {
-    if (!rescan(1200, 35)) {
-          if (rescan(2000, 45)){
+ if ((state != STATE_DOCKED) && !rescan(650, 25)) {
+    if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
+          if ((state != STATE_DOCKED) && rescan(2000, 50)){
             TargetFound = 1;
             turnLeft(100);
           }
@@ -341,9 +344,9 @@ void goToTarget3() {
   
   if (pingTarget() > initialDistance) {
     halt();
-    if (!rescan(550, 16)){
-      if (!rescan(1200, 35)) {
-        if (!rescan(2000, 45)){
+    if ((state != STATE_DOCKED) && !rescan(550, 16)){
+      if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
+        if ((state != STATE_DOCKED) && !rescan(2000, 50)){
           state = STATE_NOT_FOUND;
         }
       }
@@ -491,10 +494,10 @@ void findTarget(){
 
 // Turning 180 degrees back home
 void turnHome(){
-  for (int i=0; i<7; i++){
+  for (int i=0; i<50; i++){
     goForward();
-    delay(100);
-    turnLeft(700);
+    delay(50);
+    turnLeft(80);
   }
   halt();
   state = STATE_TURNED;
@@ -506,12 +509,7 @@ void undockTarget(){
   servoRight.write(180);
   delay(500);
   halt();
-  if (leftSide){
-    turnLeft(1300);
-  }
-  else {
-    turnLeft(1700);
-  }
+  turnLeft(1400 + turnUndock);
   state = STATE_SEARCHING;
   Serial.println("Undock Finished");
 }
@@ -532,6 +530,11 @@ long RCTime(int sensorIn){
 
 boolean leftWasBlack = false;
 boolean rightWasBlack = false;
+boolean middleWasBlack = false;
+boolean firstLineCross = false;
+boolean firstRightCross = false;
+boolean firstLeftCross = false;
+
 
 // Following the black line
 void followBlackLine()
@@ -553,24 +556,40 @@ void followBlackLine()
 
   debug(message);
   debug(message2);
+  
+  unsigned long timeLineDelta;
+  endLineTime = millis();
+  timeLineDelta = endLineTime - startLineTime;
 
-  if ((isRightBlack && isMiddleBlack && rightWasBlack && leftWasBlack)
-    ||(isLeftBlack && isMiddleBlack && rightWasBlack && leftWasBlack))
+  if ((isRightBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
+    ||(isLeftBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000)))
   {
       debug("Stop");
-      servoLeft.write(90);
-      servoRight.write(90);
+      halt();
+      if(isRightBlack && isMiddleBlack && isLeftBlack) {
+        turnUndock = 0;
+      }
+      else if (firstRightCross){
+        turnUndock = -330;
+      }
+      else if (firstLeftCross){
+        turnUndock = 600;
+      }
+      
       state = STATE_HOME;
-      firstTurnFlag = 0;
-      leftSide = rightSide = 0;
-      //rightWasBlack = false; 
-      //leftWasBlack = false;
-  } 
+      rightWasBlack = false; 
+      leftWasBlack = false;
+      middleWasBlack = false;
+      firstLineCross = false;
+      firstRightCross = false;
+      firstLeftCross = false;
+  }
   else if (isRightBlack && !isLeftBlack)
   {
-    if(!firstTurnFlag){
-      firstTurnFlag = 1;
-      leftSide = 1;
+    if(!firstLineCross){
+      firstLineCross = true;
+      startLineTime = millis();
+      firstRightCross = true;
     }
     debug("Right");  
     rightWasBlack = true;
@@ -579,20 +598,30 @@ void followBlackLine()
   }
   else if (!isRightBlack && isLeftBlack)
   {
-    if(!firstTurnFlag){
-      firstTurnFlag = 1;
-      rightSide = 1;
+    if(!firstLineCross){
+      firstLineCross = true;
+      startLineTime = millis();
+      firstLeftCross = true;
     }
     debug("Left");
     leftWasBlack = true;
     servoLeft.write(90);
     servoRight.write(0);
   }
+  else if (isMiddleBlack && !isRightBlack && !isLeftBlack)
+  {
+    if(!firstLineCross){
+      firstLineCross = true;
+      startLineTime = millis();
+    }
+    debug("Middle");
+    middleWasBlack = true;
+  }
   else 
   {
     debug("Forward");
     servoLeft.write(98);
-    servoRight.write(86);
+    servoRight.write(82);
   }
 
   delay(50);
