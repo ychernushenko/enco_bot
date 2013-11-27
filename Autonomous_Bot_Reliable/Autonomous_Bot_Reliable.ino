@@ -119,6 +119,13 @@ int findTargetBaseFirstStep(){
   
   goForwardFromBase(3400);
   
+  if(turnUndock>0){
+    turnRight(100);
+  }
+  else if (turnUndock<0){
+    turnLeft(330);
+  }
+  
   turnRight(550);
 
   int minDistance = 3; //cm SHOULD BE CALIBRATED
@@ -163,14 +170,7 @@ int findTargetBaseSecondStep(){
   debug("Scanning for Target from Base - Step 2");
   setRED_LED();
   
-  if(turnUndock>0){
-    turnRight(200);
-  }
-  else if (turnUndock<0){
-    turnLeft(200);
-  }
-  
-  goForwardFromBase(3800);
+  goForwardFromBase(3500);
   
  if ((state != STATE_DOCKED) && !rescan(650, 25)) {
     if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
@@ -340,7 +340,7 @@ void goToTarget3() {
   debug("Going to target");
   setPURPLE_LED();
   goForward();
-  delay(50); //SHOULD BE CALIBRATED
+  delay(30); //SHOULD BE CALIBRATED
   
   if (pingTarget() > initialDistance) {
     halt();
@@ -509,7 +509,7 @@ void undockTarget(){
   servoRight.write(180);
   delay(500);
   halt();
-  turnLeft(1400 + turnUndock);
+  turnLeft(1657 + turnUndock);
   state = STATE_SEARCHING;
   Serial.println("Undock Finished");
 }
@@ -570,10 +570,10 @@ void followBlackLine()
         turnUndock = 0;
       }
       else if (firstRightCross){
-        turnUndock = -330;
+        turnUndock = -477;
       }
       else if (firstLeftCross){
-        turnUndock = 600;
+        turnUndock = 350;
       }
       
       state = STATE_HOME;
