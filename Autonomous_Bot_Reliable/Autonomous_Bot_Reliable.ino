@@ -126,13 +126,13 @@ int findTargetBaseFirstStep(){
     turnLeft(330);
   }
   
-  turnRight(550);
+  turnRight(700);
 
   int minDistance = 3; //cm SHOULD BE CALIBRATED
   int maxDistance = 60; //cm SHOULD BE CALIBRATED
   int targetDistance = maxDistance + 1;
   
-  int turnCounter = 16;
+  int turnCounter = 25;
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
     if (pingTarget() <= maxDistance){
       halt();
