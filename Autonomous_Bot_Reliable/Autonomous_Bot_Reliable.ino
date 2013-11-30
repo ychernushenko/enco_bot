@@ -18,9 +18,9 @@ const int SERVO_LEFT_PIN = 6;
 
 const int PING_PIN = 9;
 const int SWITCH_PIN = 2;
-const int RED_PIN = 1;
+const int GREEN_PIN = 1;
 const int BLUE_PIN = 3;
-const int GREEN_PIN = 8;
+const int RED_PIN = 8;
 const int RIGHT_QTI_PIN = 17;
 const int MIDDLE_QTI_PIN = 18;
 const int LEFT_QTI_PIN = 19;
@@ -40,7 +40,7 @@ const int BOUNDARY_QTI_THRESHOLD = 1000;
 const int MIDDLE_QTI_THRESHOLD = 1000;
 
 int state;
-unsigned long start_time, end_time, startLineTime, endLineTime;
+unsigned long startLineTime, endLineTime;
 unsigned long time_delta = 0;
 
 // -------------------------------------------------------------------------------------
@@ -115,7 +115,6 @@ int findTargetBaseFirstStep(){
   int TargetFound = 0;
   
   debug("Scanning for Target from Base - Step 1");
-  setRED_LED();
   
   goForward(3400);
   
@@ -135,7 +134,6 @@ int findTargetBaseSecondStep(){
   int TargetFound = 0;
   
   debug("Scanning for Target from Base - Step 2");
-  setRED_LED();
   
   goForward(3100);
   
@@ -165,10 +163,6 @@ int findTargetBaseSecondStep(){
 void switchInterrupt(){
   if (state==STATE_FOUND){
     state = STATE_DOCKED;
-    end_time = millis();
-    time_delta = end_time - start_time;
-    debug("Time passed:");
-    debug(time_delta);
     halt();
   }
 }
@@ -266,31 +260,33 @@ long microsecondsToCentimeters(long microseconds)
 }
 
 // LED - Search for Target
-void setRED_LED() {
+void setRedLED() {
   digitalWrite(RED_PIN, HIGH);
   digitalWrite(GREEN_PIN, LOW);
   digitalWrite(BLUE_PIN, LOW);
 }
 
-// LED - Target found
-void setGREEN_LED() {
+// LED - Target found, blink - Go to Target
+void setGreenLED() {
   digitalWrite(RED_PIN, LOW);
   digitalWrite(GREEN_PIN, HIGH);
   digitalWrite(BLUE_PIN, LOW);
 }
 
-// LED - Pause
-void setBLUE_LED() {
+// LED - off
+void setOffLED() {
   digitalWrite(RED_PIN, LOW);
   digitalWrite(GREEN_PIN, LOW);
-  digitalWrite(BLUE_PIN, HIGH);
+  digitalWrite(BLUE_PIN, LOW);
 }
 
-// LED - Go to Target
-void setPURPLE_LED() {
+// LED - Target not found
+void setRedBlinkLED() {
   digitalWrite(RED_PIN, HIGH);
   digitalWrite(GREEN_PIN, LOW);
-  digitalWrite(BLUE_PIN, HIGH);
+  digitalWrite(BLUE_PIN, LOW);
+  delay(1000);
+  setOffLED();
 }
 
 void scanningTurnRight(){
@@ -305,19 +301,24 @@ void scanningTurnLeft(){
 
 // Going to target if lost, rescan
 void goToTarget() {
+  setGreenLED();
   int initialDistance = pingTarget();
   debug("Going to target");
-  setPURPLE_LED();
   if (initialDistance < 20){
+    setOffLED();
     goForward(100);
+    setGreenLED();
   }
   else {
+    setOffLED();
     goForward(800);
+    setGreenLED();
   }
   //delay(30); //SHOULD BE CALIBRATED
   
   if (pingTarget() > initialDistance) {
     halt();
+    setRedLED();
     if ((state != STATE_DOCKED) && !rescan(550, 16)){
       if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
         if ((state != STATE_DOCKED) && !rescan(2000, 50)){
@@ -392,7 +393,6 @@ int rescan (int initialTurn, int turnNumber){
 void findTarget(){
   debug("Scanning for Target");
 
-  setRED_LED();
   scanningTurnRight();
 
   int searchStatus = 0; //0 - not found, 1 - found
@@ -429,7 +429,6 @@ void findTarget(){
     else if(targetDistance < maxDistance) {
       searchStatus = 1;
       debug("Target found");
-      setGREEN_LED();
       state = STATE_FOUND;
     }
     searchLoop--;
@@ -438,7 +437,6 @@ void findTarget(){
 
   if (searchStatus == 0) {
     debug("Target not found. Go to pause regime");
-    setBLUE_LED();
     delay(2000); // SHOULD BE DELETED
   }
 }
@@ -590,6 +588,8 @@ void followBlackLine()
 void loop()
 {
   if (state == STATE_SEARCHING) {
+    setRedLED();
+    
    if(!findTargetBaseFirstStep()){
       if(findTargetBaseSecondStep()){
         state = STATE_FOUND;
@@ -597,6 +597,7 @@ void loop()
       else {
         halt(); // Target not found
         state = STATE_NOT_FOUND;
+        setRedBlinkLED();
       }
     }
     else {
@@ -604,10 +605,10 @@ void loop()
     }
   }
   else if (state == STATE_FOUND){
-    start_time = millis();
     goToTarget();
   }
   else if (state == STATE_DOCKED){
+    setGreenLED();
     turnHome();
   }
   else if (state == STATE_TURNED){
