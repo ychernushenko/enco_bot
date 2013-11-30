@@ -117,7 +117,7 @@ int findTargetBaseFirstStep(){
   debug("Scanning for Target from Base - Step 1");
   setRED_LED();
   
-  goForwardFromBase(3400);
+  goForward(3400);
   
   if(turnUndock>0){
     turnRight(100);
@@ -137,7 +137,7 @@ int findTargetBaseSecondStep(){
   debug("Scanning for Target from Base - Step 2");
   setRED_LED();
   
-  goForwardFromBase(3500);
+  goForward(3100);
   
  if ((state != STATE_DOCKED) && !rescan(650, 25)) {
     if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
@@ -151,7 +151,7 @@ int findTargetBaseSecondStep(){
       turnLeft(100);
     }
   }
-  else {
+  else{
    TargetFound = 1;
    turnLeft(100);
   }
@@ -202,7 +202,7 @@ void turnLeft(int msec){
   halt();
 }
 
-void goForwardFromBase(int msec){
+void goForward(int msec){
   servoLeft.write(180);
   servoRight.write(0);
   delay(msec);
@@ -303,21 +303,18 @@ void scanningTurnLeft(){
   servoRight.write(87);
 }
 
-// Going forward
-void goToTarget() {
-  debug("Going to target");
-  setPURPLE_LED();
-  goForward();
-  delay(5000); //SHOULD BE CALIBRATED
-}
-
 // Going to target if lost, rescan
-void goToTarget3() {
+void goToTarget() {
   int initialDistance = pingTarget();
   debug("Going to target");
   setPURPLE_LED();
-  goForward();
-  delay(30); //SHOULD BE CALIBRATED
+  if (initialDistance < 20){
+    goForward(100);
+  }
+  else {
+    goForward(800);
+  }
+  //delay(30); //SHOULD BE CALIBRATED
   
   if (pingTarget() > initialDistance) {
     halt();
@@ -341,16 +338,19 @@ int rescan (int initialTurn, int turnNumber){
   rescan_start_time = millis();
 
   int minDistance = 3; //cm SHOULD BE CALIBRATED
-  int maxDistance = 50; //cm SHOULD BE CALIBRATED
+  int maxDistance = 60; //cm SHOULD BE CALIBRATED
   int targetDistance = maxDistance + 1;
   
   int turnCounter = turnNumber;
+
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
     if (pingTarget() <= maxDistance){
       halt();
       int targetDistance1, targetDistance2, targetDistance3;
       targetDistance1 = pingTarget();
+      delay(20);
       targetDistance2 = pingTarget();
+      delay(20);
       targetDistance3 = pingTarget();
       if ((targetDistance1 <= maxDistance) && (targetDistance2 <= maxDistance) && (targetDistance3 <= maxDistance)) {
         targetDistance = (targetDistance1 + targetDistance2 + targetDistance3)/3;
@@ -369,7 +369,12 @@ int rescan (int initialTurn, int turnNumber){
   
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
-    turnLeft(100);
+    if(targetDistance < 20) {
+      turnLeft(100);
+    }
+    else{
+      turnLeft(80);
+    }
   }
   else {
     turnRight(550);
@@ -382,55 +387,6 @@ int rescan (int initialTurn, int turnNumber){
   return TargetFound;
 }
 
-
-// Going forward v2
-void goToTarget2() {
-  debug("Going to target");
-  setPURPLE_LED();
-  goForward();
-  int initialDistance = pingTarget();
-  int distance = initialDistance;
-  debug("Distance to target = ");
-  debug(distance);
-  int numberOfOuts = 0;
-  int oneSideCycle = 1; // SHOULD BE CALIBRATED
-  int outCycle = 0;
-  boolean goesRight = false;
-
-  while (distance>10) {
-    int newDistance = pingTarget();
-    debug("New distance to target = ");
-    debug(newDistance);
-    if (newDistance > distance + 2){
-      debug("Out");
-      numberOfOuts++;
-      if (numberOfOuts>3){
-        debug("Out of way");
-        // SHOULD BE CALIBRATED
-        outCycle ++;
-        if (outCycle>oneSideCycle){
-          goesRight = !goesRight;
-          oneSideCycle *= 2;
-        } 
-        if (goesRight){
-          goRight();
-        }
-        else {
-          goLeft();
-        }
-      }    
-    }
-    else {
-      if (numberOfOuts > 3){
-        delay(500);
-      }
-      goForward();
-      numberOfOuts = 0;
-      outCycle = 0;
-      distance = newDistance;
-    }
-  }
-}
 
 // Finding target using sonar
 void findTarget(){
@@ -649,9 +605,7 @@ void loop()
   }
   else if (state == STATE_FOUND){
     start_time = millis();
-    //goToTarget();
-    //goToTarget2();
-    goToTarget3();
+    goToTarget();
   }
   else if (state == STATE_DOCKED){
     turnHome();
