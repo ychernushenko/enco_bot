@@ -190,8 +190,8 @@ void turnRight(int msec){
   delay(msec);
   halt();
   
-  Serial.println(rightTurnsMsec);
-  delay(3000);
+//  Serial.println(rightTurnsMsec);
+//  delay(3000);
 }
 
 void turnLeft(int msec){
@@ -363,6 +363,10 @@ int rescan (int initialTurn, int turnNumber){
     turnCounter--;
   }
   
+  rescan_end_time = millis();
+  rescan_time = rescan_end_time - rescan_start_time;
+  leftTurnsMsec += rescan_time * 0.3;
+  
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
     turnLeft(100);
@@ -370,16 +374,10 @@ int rescan (int initialTurn, int turnNumber){
   else {
     turnRight(550);
   }
-
-  rescan_end_time = millis();
   
-  rescan_time = rescan_end_time - rescan_start_time;
-  
-  leftTurnsMsec += rescan_time * 0.4;
-  
-  Serial.println(rescan_time);
-  Serial.println(leftTurnsMsec);
-  delay(3000);
+//  Serial.println(rescan_time);
+//  Serial.println(leftTurnsMsec);
+//  delay(3000);
 
   return TargetFound;
 }
@@ -504,9 +502,6 @@ void turnHome(){
     turnRight(90);
   }
   
-  leftTurnsMsec = 0;
-  rightTurnsMsec = 0;
-  
   state = STATE_TURNED;
   Serial.println("Turn Finished");
 }
@@ -517,6 +512,8 @@ void undockTarget(){
   delay(500);
   halt();
   turnLeft(1657 + turnUndock);
+  leftTurnsMsec = 0;
+  rightTurnsMsec = 0;
   state = STATE_SEARCHING;
   Serial.println("Undock Finished");
 }
