@@ -125,41 +125,8 @@ int findTargetBaseFirstStep(){
   else if (turnUndock<0){
     turnLeft(330);
   }
-  
-  turnRight(700);
 
-  int minDistance = 3; //cm SHOULD BE CALIBRATED
-  int maxDistance = 60; //cm SHOULD BE CALIBRATED
-  int targetDistance = maxDistance + 1;
-  
-  int turnCounter = 25;
-  while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
-    if (pingTarget() <= maxDistance){
-      halt();
-      int targetDistance1, targetDistance2, targetDistance3;
-      targetDistance1 = pingTarget();
-      targetDistance2 = pingTarget();
-      targetDistance3 = pingTarget();
-      if ((targetDistance1 <= maxDistance) && (targetDistance2 <= maxDistance) && (targetDistance3 <= maxDistance)) {
-        targetDistance = (pingTarget() + pingTarget() + pingTarget())/3;
-      }
-      slowScanningTurnLeft();
-    }
-    Serial.println(targetDistance);
-    delay(20);
-    slowScanningTurnLeft();
-    turnCounter--;
-  }
-  
-  if (targetDistance <= maxDistance && targetDistance >= minDistance){
-    TargetFound = 1;
-    turnLeft(100);
-  }
-  else {
-    turnRight(350);
-  }
-
-  return TargetFound;
+  return rescan(700, 25);
 }
 
 // -------------------------------------------------------------------------------------
@@ -206,19 +173,29 @@ void switchInterrupt(){
   }
 }
 
-void slowScanningTurnLeft(){
+
+int leftTurnsMsec = 0;
+int rightTurnsMsec = 0;
+
+void slowScanningTurnLeft(){  
   servoLeft.write(87);
   servoRight.write(87);
 }
 
 void turnRight(int msec){
+  rightTurnsMsec += msec;
+  
   servoLeft.write(180);
   servoRight.write(180);
   delay(msec);
   halt();
+  
+  Serial.println(rightTurnsMsec);
+  delay(3000);
 }
 
 void turnLeft(int msec){
+  leftTurnsMsec += msec;
   servoLeft.write(0);
   servoRight.write(0);
   delay(msec);
@@ -355,9 +332,13 @@ void goToTarget3() {
 }
 
 int rescan (int initialTurn, int turnNumber){
+  unsigned long rescan_start_time, rescan_end_time, rescan_time;
+  
   int TargetFound = 0;
   
   turnRight(initialTurn);
+
+  rescan_start_time = millis();
 
   int minDistance = 3; //cm SHOULD BE CALIBRATED
   int maxDistance = 50; //cm SHOULD BE CALIBRATED
@@ -365,9 +346,15 @@ int rescan (int initialTurn, int turnNumber){
   
   int turnCounter = turnNumber;
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
-    if ((targetDistance = pingTarget()) <= maxDistance){
+    if (pingTarget() <= maxDistance){
       halt();
-      targetDistance = (pingTarget() + pingTarget() + pingTarget())/3;
+      int targetDistance1, targetDistance2, targetDistance3;
+      targetDistance1 = pingTarget();
+      targetDistance2 = pingTarget();
+      targetDistance3 = pingTarget();
+      if ((targetDistance1 <= maxDistance) && (targetDistance2 <= maxDistance) && (targetDistance3 <= maxDistance)) {
+        targetDistance = (targetDistance1 + targetDistance2 + targetDistance3)/3;
+      }
       slowScanningTurnLeft();
     }
     Serial.println(targetDistance);
@@ -381,8 +368,18 @@ int rescan (int initialTurn, int turnNumber){
     turnLeft(100);
   }
   else {
-    turnRight(350);
+    turnRight(550);
   }
+
+  rescan_end_time = millis();
+  
+  rescan_time = rescan_end_time - rescan_start_time;
+  
+  leftTurnsMsec += rescan_time * 0.4;
+  
+  Serial.println(rescan_time);
+  Serial.println(leftTurnsMsec);
+  delay(3000);
 
   return TargetFound;
 }
@@ -494,12 +491,22 @@ void findTarget(){
 
 // Turning 180 degrees back home
 void turnHome(){
-  for (int i=0; i<50; i++){
+  
+  int turnsDiff = rightTurnsMsec - leftTurnsMsec;
+  int iterations = 30 - turnsDiff / 60;
+    
+    Serial.println(turnsDiff);  
+   // delay(50000);
+    
+  for (int i=0; i<iterations; i++){
     goForward();
-    delay(50);
-    turnLeft(80);
+    delay(20);
+    turnRight(90);
   }
-  halt();
+  
+  leftTurnsMsec = 0;
+  rightTurnsMsec = 0;
+  
   state = STATE_TURNED;
   Serial.println("Turn Finished");
 }
