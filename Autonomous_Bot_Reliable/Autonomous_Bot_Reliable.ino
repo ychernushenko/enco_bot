@@ -29,12 +29,13 @@ const int STATE_NOT_FOUND = 2;
 const int STATE_DOCKED = 3;
 const int STATE_TURNED = 4;
 const int STATE_HOME = 5;
+const int maxDistance = 60;
 
 int turnUndock = 0;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
-const int BOUNDARY_QTI_THRESHOLD = 1000;
-const int MIDDLE_QTI_THRESHOLD = 1000;
+const int BOUNDARY_QTI_THRESHOLD = 1100;
+const int MIDDLE_QTI_THRESHOLD = 1100;
 
 int state;
 unsigned long startLineTime, endLineTime;
@@ -61,24 +62,24 @@ void debug(String message){
 void setup() {
   Serial.begin(9600);
 
-  // check for the presence of the shield:
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present"); 
-    while(true);
-  } 
-
-  // attempt to connect to Wifi network:
-  while (wifiStatus != WL_CONNECTED) { 
-    Serial.print("Attempting to connect to SSID: ");
-    Serial.println(ssid);
-    wifiStatus = WiFi.begin(ssid);
-  }
-  
-  IPAddress ip = WiFi.localIP();
-  Serial.print("IP Address: ");
-  Serial.println(ip);
-  
-  server.begin();
+//  // check for the presence of the shield:
+//  if (WiFi.status() == WL_NO_SHIELD) {
+//    Serial.println("WiFi shield not present"); 
+//    while(true);
+//  } 
+//
+//  // attempt to connect to Wifi network:
+//  while (wifiStatus != WL_CONNECTED) { 
+//    Serial.print("Attempting to connect to SSID: ");
+//    Serial.println(ssid);
+//    wifiStatus = WiFi.begin(ssid);
+//  }
+//  
+//  IPAddress ip = WiFi.localIP();
+//  Serial.print("IP Address: ");
+//  Serial.println(ip);
+//  
+//  server.begin();
  
 //  state = STATE_PRE_START;
   state = STATE_SEARCHING;
@@ -110,7 +111,7 @@ int findTargetBaseFirstStep(){
     turnLeft(350);
   }
 
-  return rescan(700, 29);
+  return rescan(700, 90);
 }
 
 // -------------------------------------------------------------------------------------
@@ -122,8 +123,8 @@ int findTargetBaseSecondStep(){
   
   goForward(3100);
   
- if ((state != STATE_DOCKED) && !rescan(650, 27)) {
-    if ((state != STATE_DOCKED) && !rescan(1000, 40)) {
+ if ((state != STATE_DOCKED) && !rescan(650, 75)) {
+    if ((state != STATE_DOCKED) && !rescan(1000, 120)) {
       state=STATE_NOT_FOUND;
     }
     else {
@@ -226,8 +227,7 @@ int pingTarget() {
   cm = microsecondsToCentimeters(duration);
 
   debug(cm);
-
-  delay(100); //MAKE ME FASTER
+  delay(30);
   return cm;
 }
 
@@ -285,14 +285,14 @@ void goToTarget() {
   setGreenLED();
   int initialDistance = pingTarget();
   debug("Going to target");
-  if (initialDistance < 15){
+  if (initialDistance < 20){
     setOffLED();
-    goForward(100);
+    goForward(120);
     setGreenLED();
   }
-  else {
+  else if (initialDistance < maxDistance){
     setOffLED();
-    goForward(900);
+    goForward(700);
     setGreenLED();
   }
   //delay(30); //SHOULD BE CALIBRATED
@@ -300,8 +300,8 @@ void goToTarget() {
   if (pingTarget() > initialDistance) {
     halt();
     setRedLED();
-    if ((state != STATE_DOCKED) && !rescan(550, 16)){
-      if ((state != STATE_DOCKED) && !rescan(1200, 38)) {
+    if ((state != STATE_DOCKED) && !rescan(200, 20)){
+      if ((state != STATE_DOCKED) && !rescan(600, 50)) {
         state = STATE_NOT_FOUND;
       }
     }
@@ -318,7 +318,6 @@ int rescan (int initialTurn, int turnNumber){
   rescan_start_time = millis();
 
   int minDistance = 3; //cm SHOULD BE CALIBRATED
-  int maxDistance = 60; //cm SHOULD BE CALIBRATED
   int targetDistance = maxDistance + 1;
   
   int turnCounter = turnNumber;
@@ -328,9 +327,7 @@ int rescan (int initialTurn, int turnNumber){
       halt();
       int targetDistance1, targetDistance2, targetDistance3;
       targetDistance1 = pingTarget();
-      delay(20);
       targetDistance2 = pingTarget();
-      delay(20);
       targetDistance3 = pingTarget();
       if ((targetDistance1 <= maxDistance) && (targetDistance2 <= maxDistance) && (targetDistance3 <= maxDistance)) {
         targetDistance = (targetDistance1 + targetDistance2 + targetDistance3)/3;
@@ -350,78 +347,22 @@ int rescan (int initialTurn, int turnNumber){
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
     if(targetDistance < 20) {
-      turnLeft(120);
+      turnLeft(110);
     }
     else if (targetDistance < minDistance){
-      goForward(600);
+      goForward(650);
     }
     else {
-      turnLeft(90);
+      turnLeft(130);
     }
   }
   else {
-    turnRight(initialTurn);
+    turnRight(initialTurn-100);
   }
-  
-//  Serial.println(rescan_time);
-//  Serial.println(leftTurnsMsec);
-//  delay(3000);
 
   return TargetFound;
 }
 
-
-// Finding target using sonar
-void findTarget(){
-  debug("Scanning for Target");
-
-  scanningTurnRight();
-
-  int searchStatus = 0; //0 - not found, 1 - found
-  int minDistance = 3; //cm SHOULD BE CALIBRATED
-  int maxDistance = 180; //cm SHOULD BE CALIBRATED
-  int targetDistance = maxDistance;
-  const int left = 0, right = 1, loopLength=15;
-  int searchLoop = 100;
-  int side = right;
-  int iteration = 1;
-  int currentLoop = loopLength * iteration;
-  while (searchLoop > 0 && searchStatus == 0) {
-    if (currentLoop > 0){
-      currentLoop --;
-    }
-    else {
-      iteration ++;
-      currentLoop = loopLength * iteration;
-      side = 1 - side;
-      if (side==left) {
-        scanningTurnLeft();
-      } 
-      else {
-        scanningTurnRight();
-      }
-    }
-
-    targetDistance = pingTarget();
-
-   if (targetDistance < minDistance) {
-      //do something
-      debug("Target is too close");
-    }
-    else if(targetDistance < maxDistance) {
-      searchStatus = 1;
-      debug("Target found");
-      state = STATE_FOUND;
-    }
-    searchLoop--;
-    delay(10);
-  }
-
-  if (searchStatus == 0) {
-    debug("Target not found. Go to pause regime");
-    delay(2000); // SHOULD BE DELETED
-  }
-}
 
 // Turning 180 degrees back home
 void turnHome(){
@@ -605,6 +546,17 @@ void waitForCommands(){
 
 void loop()
 {
+//  int rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
+//  int middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
+//  int leftQtiRCTime = RCTime(LEFT_QTI_PIN);
+//  
+//  Serial.println(rightQtiRCTime);
+//  Serial.println(middleQtiRCTime);
+//  Serial.println(leftQtiRCTime);
+//  Serial.println("------------");
+//  
+//  delay(1000);
+  
   if (state == STATE_PRE_START) {
     waitForCommands();
   }
