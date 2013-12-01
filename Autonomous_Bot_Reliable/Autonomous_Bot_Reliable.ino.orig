@@ -15,7 +15,7 @@ const int SERVO_LEFT_PIN = 6;
 
 const int PING_PIN = 9;
 const int SWITCH_PIN = 2;
-const int GREEN_PIN = 7;
+const int GREEN_PIN = 1;
 const int BLUE_PIN = 3;
 const int RED_PIN = 8;
 const int RIGHT_QTI_PIN = 17;
@@ -80,8 +80,7 @@ void setup() {
   
   server.begin();
  
-//  state = STATE_PRE_START;
-  state = STATE_SEARCHING;
+  state = STATE_PRE_START;
   servoLeft.attach(SERVO_LEFT_PIN);
   servoRight.attach(SERVO_RIGHT_PIN);
   halt();
@@ -101,16 +100,16 @@ int findTargetBaseFirstStep(){
   
   debug("Scanning for Target from Base - Step 1");
   
-  goForward(3500);
+  goForward(3400);
   
   if(turnUndock>0){
-    turnRight(90);
+    turnRight(100);
   }
   else if (turnUndock<0){
-    turnLeft(350);
+    turnLeft(330);
   }
 
-  return rescan(700, 29);
+  return rescan(700, 25);
 }
 
 // -------------------------------------------------------------------------------------
@@ -122,16 +121,21 @@ int findTargetBaseSecondStep(){
   
   goForward(3100);
   
- if ((state != STATE_DOCKED) && !rescan(650, 27)) {
-    if ((state != STATE_DOCKED) && !rescan(1000, 40)) {
-      state=STATE_NOT_FOUND;
-    }
+ if ((state != STATE_DOCKED) && !rescan(650, 25)) {
+    if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
+          if ((state != STATE_DOCKED) && rescan(2000, 50)){
+            TargetFound = 1;
+            turnLeft(100);
+          }
+        }
     else {
       TargetFound = 1;
+      turnLeft(100);
     }
   }
   else{
    TargetFound = 1;
+   turnLeft(100);
   }
 
   return TargetFound;
@@ -262,12 +266,13 @@ void setOffLED() {
 
 // LED - Target not found
 void setRedBlinkLED() {
+  Serial.println("Red high");
   digitalWrite(RED_PIN, HIGH);
   digitalWrite(GREEN_PIN, LOW);
   digitalWrite(BLUE_PIN, LOW);
   delay(1000);
+  Serial.println("Red low");
   setOffLED();
-  delay(1000);
 }
 
 void scanningTurnRight(){
@@ -285,14 +290,14 @@ void goToTarget() {
   setGreenLED();
   int initialDistance = pingTarget();
   debug("Going to target");
-  if (initialDistance < 15){
+  if (initialDistance < 20){
     setOffLED();
     goForward(100);
     setGreenLED();
   }
   else {
     setOffLED();
-    goForward(900);
+    goForward(800);
     setGreenLED();
   }
   //delay(30); //SHOULD BE CALIBRATED
@@ -301,8 +306,10 @@ void goToTarget() {
     halt();
     setRedLED();
     if ((state != STATE_DOCKED) && !rescan(550, 16)){
-      if ((state != STATE_DOCKED) && !rescan(1200, 38)) {
-        state = STATE_NOT_FOUND;
+      if ((state != STATE_DOCKED) && !rescan(1200, 35)) {
+        if ((state != STATE_DOCKED) && !rescan(2000, 50)){
+          state = STATE_NOT_FOUND;
+        }
       }
     }
   }
@@ -350,17 +357,14 @@ int rescan (int initialTurn, int turnNumber){
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
     if(targetDistance < 20) {
-      turnLeft(120);
+      turnLeft(100);
     }
-    else if (targetDistance < minDistance){
-      goForward(600);
-    }
-    else {
-      turnLeft(90);
+    else{
+      turnLeft(80);
     }
   }
   else {
-    turnRight(initialTurn);
+    turnRight(550);
   }
   
 //  Serial.println(rescan_time);
