@@ -433,13 +433,9 @@ long RCTime(int sensorIn){
   return duration;
 }
 
-boolean leftWasBlack = false;
-boolean rightWasBlack = false;
-boolean middleWasBlack = false;
 boolean firstLineCross = false;
 boolean firstRightCross = false;
 boolean firstLeftCross = false;
-
 
 // Following the black line
 void followBlackLine()
@@ -452,12 +448,8 @@ void followBlackLine()
   boolean isMiddleBlack = middleQtiRCTime > MIDDLE_QTI_THRESHOLD;
   boolean isLeftBlack = leftQtiRCTime > BOUNDARY_QTI_THRESHOLD;
 
-  //Serial.println("IR");
-  //Serial.println(blackLineTurns);
   String message = String(rightQtiRCTime) + "; " + String(middleQtiRCTime) + "; " + String(leftQtiRCTime);
   String message2 = String(isRightBlack) + "; " + String(isMiddleBlack) + "; " + String(isLeftBlack);
-  debug(String(leftWasBlack));
-  debug(String(rightWasBlack));
 
   debug(message);
   debug(message2);
@@ -482,9 +474,6 @@ void followBlackLine()
       }
       
       state = STATE_HOME;
-      rightWasBlack = false; 
-      leftWasBlack = false;
-      middleWasBlack = false;
       firstLineCross = false;
       firstRightCross = false;
       firstLeftCross = false;
@@ -497,7 +486,6 @@ void followBlackLine()
       firstRightCross = true;
     }
     debug("Right");  
-    rightWasBlack = true;
     servoLeft.write(180);
     servoRight.write(90);
   }
@@ -509,7 +497,6 @@ void followBlackLine()
       firstLeftCross = true;
     }
     debug("Left");
-    leftWasBlack = true;
     servoLeft.write(90);
     servoRight.write(0);
   }
@@ -520,7 +507,6 @@ void followBlackLine()
       startLineTime = millis();
     }
     debug("Middle");
-    middleWasBlack = true;
   }
   else 
   {
@@ -571,16 +557,7 @@ void waitForCommands(){
 int ping = 180;
 
 void loop()
-{
-/*  Serial.println(ping);
-  if (ping < maxDistance){
-    halt(); 
-  } else 
-  {
-    slowScanningTurnLeft();
-    ping = pingTarget();
-  }*/
-  
+{ 
   if (state == STATE_PRE_START) {
     waitForCommands();
   }
