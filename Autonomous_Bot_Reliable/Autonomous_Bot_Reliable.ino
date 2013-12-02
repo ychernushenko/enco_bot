@@ -34,6 +34,7 @@ const int STATE_SEARCHING_SECOND = 7;
 const int maxDistance = 65;
 
 int turnUndock = 0;
+boolean hasMinion = false;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
 const int BOUNDARY_QTI_THRESHOLD = 1100;
@@ -42,6 +43,7 @@ const int MIDDLE_QTI_THRESHOLD = 1100;
 int state;
 unsigned long startLineTime, endLineTime;
 unsigned long time_delta = 0;
+unsigned long timeDockedDelta = 0, dockedTime = 0;
 
 // -------------------------------------------------------------------------------------
 // Block to define debugging
@@ -146,6 +148,7 @@ int findTargetBaseSecondStep(){
 void switchInterrupt(){
   if ((state==STATE_FOUND_FIRST) || (state==STATE_FOUND_SECOND)) {
     state = STATE_DOCKED;
+    dockedTime = millis();
     halt();
   }
 }
@@ -189,6 +192,13 @@ void goForward(int msec){
 void goForward(){
   servoLeft.write(180);
   servoRight.write(0);
+}
+
+void goBackward(int msec){
+  servoLeft.write(0);
+  servoRight.write(180);
+  delay(msec);
+  halt();
 }
 
 void goRight(){
@@ -393,9 +403,12 @@ void turnHome(){
   
   int turnsDiff = rightTurnsMsec - leftTurnsMsec;
   int iterations = 30 - turnsDiff / 60;
+  
+  if (!hasMinion){
+    iterations = 20;
+  }
     
-    Serial.println(turnsDiff);  
-   // delay(50000);
+  Serial.println(turnsDiff);  
     
   for (int i=0; i<iterations; i++){
     goForward();
@@ -457,9 +470,11 @@ void followBlackLine()
   unsigned long timeLineDelta;
   endLineTime = millis();
   timeLineDelta = endLineTime - startLineTime;
+  timeDockedDelta = endLineTime - dockedTime;
 
   if ((isRightBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
-    ||(isLeftBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000)))
+    ||(isLeftBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
+    ||(isRightBlack && isMiddleBlack && isLeftBlack && (timeDockedDelta > 8000)))
   {
       debug("Stop");
       halt();
@@ -596,6 +611,7 @@ void loop()
   }
   else if (state == STATE_DOCKED){
     setGreenLED();
+    hasMinion = true;
     turnHome();
   }
   else if (state == STATE_TURNED){
@@ -604,9 +620,32 @@ void loop()
   }
   else if (state == STATE_HOME){
     Serial.println("Leave Target at Home");
-    undockTarget();
+    if (hasMinion){
+      undockTarget();
+    }
+    else {
+      if (turnUndock == 0){
+        turnLeft(1500);
+        goBackward(1000);
+      }
+      else if (turnUndock > 0){
+        turnRight(550);
+        goForward(1000);
+        turnRight(650);
+        goBackward(1000); 
+      }
+      else if (turnUndock < 0){
+        turnLeft(600);
+        goForward(1000);
+        turnLeft(750);
+        goBackward(1000); 
+      }
+      state = STATE_PRE_START;  
+    }
   }
   else if (state = STATE_NOT_FOUND){
+    hasMinion = false;
+    turnHome();
     setRedBlinkLED();
   }
 }
