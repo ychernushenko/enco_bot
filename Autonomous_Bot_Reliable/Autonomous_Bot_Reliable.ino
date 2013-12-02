@@ -6,7 +6,7 @@ Servo servoLeft, servoRight;
 
 char ssid[] = "CMU"; //  your network SSID (name) 
 int wifiStatus = WL_IDLE_STATUS;
-WiFiServer server(80);
+WiFiServer server(50007);
 
 //Interface
 // Don't use this pins: 4, 7, 10, 11, 12, 13
@@ -15,7 +15,7 @@ const int SERVO_LEFT_PIN = 6;
 
 const int PING_PIN = 9;
 const int SWITCH_PIN = 2;
-const int GREEN_PIN = 7;
+const int GREEN_PIN = 15;
 const int BLUE_PIN = 3;
 const int RED_PIN = 8;
 const int RIGHT_QTI_PIN = 17;
@@ -29,7 +29,7 @@ const int STATE_NOT_FOUND = 2;
 const int STATE_DOCKED = 3;
 const int STATE_TURNED = 4;
 const int STATE_HOME = 5;
-const int maxDistance = 60;
+const int maxDistance = 65;
 
 int turnUndock = 0;
 
@@ -102,7 +102,7 @@ int findTargetBaseFirstStep(){
   
   debug("Scanning for Target from Base - Step 1");
   
-  goForward(3500);
+  goForward(3600);
   
   if(turnUndock>0){
     turnRight(90);
@@ -111,7 +111,7 @@ int findTargetBaseFirstStep(){
     turnLeft(350);
   }
 
-  return rescan(700, 90);
+  return rescan(700, 37);
 }
 
 // -------------------------------------------------------------------------------------
@@ -123,8 +123,8 @@ int findTargetBaseSecondStep(){
   
   goForward(3100);
   
- if ((state != STATE_DOCKED) && !rescan(650, 75)) {
-    if ((state != STATE_DOCKED) && !rescan(1000, 120)) {
+ if ((state != STATE_DOCKED) && !rescan(700, 37)) {
+    if ((state != STATE_DOCKED) && !rescan(1000, 60)) {
       state=STATE_NOT_FOUND;
     }
     else {
@@ -153,8 +153,8 @@ int leftTurnsMsec = 0;
 int rightTurnsMsec = 0;
 
 void slowScanningTurnLeft(){  
-  servoLeft.write(87);
-  servoRight.write(87);
+  servoLeft.write(0);
+  servoRight.write(0);
 }
 
 void turnRight(int msec){
@@ -227,7 +227,7 @@ int pingTarget() {
   cm = microsecondsToCentimeters(duration);
 
   debug(cm);
-  delay(30);
+  delay(5);
   return cm;
 }
 
@@ -321,7 +321,7 @@ int rescan (int initialTurn, int turnNumber){
   int targetDistance = maxDistance + 1;
   
   int turnCounter = turnNumber;
-
+  Serial.println("Test");
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
     if (pingTarget() <= maxDistance){
       halt();
@@ -342,7 +342,7 @@ int rescan (int initialTurn, int turnNumber){
   
   rescan_end_time = millis();
   rescan_time = rescan_end_time - rescan_start_time;
-  leftTurnsMsec += rescan_time * 0.3;
+  leftTurnsMsec += rescan_time * 0.7;
   
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
@@ -357,7 +357,7 @@ int rescan (int initialTurn, int turnNumber){
     }
   }
   else {
-    turnRight(initialTurn-100);
+    turnRight(initialTurn);
   }
 
   return TargetFound;
@@ -544,18 +544,18 @@ void waitForCommands(){
   }
 }
 
+int ping = 180;
+
 void loop()
 {
-//  int rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
-//  int middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
-//  int leftQtiRCTime = RCTime(LEFT_QTI_PIN);
-//  
-//  Serial.println(rightQtiRCTime);
-//  Serial.println(middleQtiRCTime);
-//  Serial.println(leftQtiRCTime);
-//  Serial.println("------------");
-//  
-//  delay(1000);
+/*  Serial.println(ping);
+  if (ping < maxDistance){
+    halt(); 
+  } else 
+  {
+    slowScanningTurnLeft();
+    ping = pingTarget();
+  }*/
   
   if (state == STATE_PRE_START) {
     waitForCommands();
