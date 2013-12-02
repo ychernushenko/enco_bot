@@ -35,6 +35,7 @@ const int maxDistance = 65;
 
 int turnUndock = 0;
 boolean hasMinion = false;
+boolean hasNewMessage = false;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
 const int BOUNDARY_QTI_THRESHOLD = 1100;
@@ -61,32 +62,49 @@ void debug(String message){
   Serial.println(message);
 }
 
+char* stateString(){
+  switch (state){
+    case STATE_PRE_START: return "Waiting for commands"; break;
+    case STATE_SEARCHING_FIRST: return "Searching for a minion"; break;
+    case STATE_FOUND_FIRST: return "Minion found"; break;
+    case STATE_NOT_FOUND: return "No minion found. Going to pause state"; break;
+    case STATE_DOCKED: return "Docked with minion"; break;
+    case STATE_TURNED: return "Docked with minion"; break;
+    case STATE_HOME: return "Minion delivered"; break;
+    case STATE_FOUND_SECOND: return "Minion found"; break;
+    case STATE_SEARCHING_SECOND: return "Searching for a minion"; break;
+  default: return "ERROR!";  
+}
+}
+
 // -------------------------------------------------------------------------------------
 // Initial ENCO BOT setup
 void setup() {
   Serial.begin(9600);
 
-//  // check for the presence of the shield:
-//  if (WiFi.status() == WL_NO_SHIELD) {
-//    Serial.println("WiFi shield not present"); 
-//    while(true);
-//  } 
-//
-//  // attempt to connect to Wifi network:
-//  while (wifiStatus != WL_CONNECTED) { 
-//    Serial.print("Attempting to connect to SSID: ");
-//    Serial.println(ssid);
-//    wifiStatus = WiFi.begin(ssid);
-//  }
-//  
-//  IPAddress ip = WiFi.localIP();
-//  Serial.print("IP Address: ");
-//  Serial.println(ip);
-//  
-//  server.begin();
+  // check for the presence of the shield:
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present"); 
+    while(true);
+  } 
+
+  // attempt to connect to Wifi network:
+  while (wifiStatus != WL_CONNECTED) { 
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    wifiStatus = WiFi.begin(ssid);
+  }
+  
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+  
+  server.begin();
  
-//  state = STATE_PRE_START;
-  state = STATE_SEARCHING_FIRST;
+  state = STATE_PRE_START;
+  hasNewMessage = true;
+
+//  state = STATE_SEARCHING_FIRST;
   servoLeft.attach(SERVO_LEFT_PIN);
   servoRight.attach(SERVO_RIGHT_PIN);
   halt();
@@ -148,6 +166,7 @@ int findTargetBaseSecondStep(){
 void switchInterrupt(){
   if ((state==STATE_FOUND_FIRST) || (state==STATE_FOUND_SECOND)) {
     state = STATE_DOCKED;
+    hasNewMessage = true;
     dockedTime = millis();
     halt();
   }
@@ -315,6 +334,7 @@ void goToTargetFirst() {
     if ((state != STATE_DOCKED) && !rescan(350, 16)){
       if ((state != STATE_DOCKED) && !rescan(500, 30)) {
         state = STATE_SEARCHING_SECOND;
+        hasNewMessage = true;
       }
     }
   }
@@ -344,6 +364,7 @@ void goToTargetSecond() {
     if ((state != STATE_DOCKED) && !rescan(350, 16)){
       if ((state != STATE_DOCKED) && !rescan(500, 30)) {
         state = STATE_NOT_FOUND;
+        hasNewMessage = true;
       }
     }
   }
@@ -399,8 +420,7 @@ int rescan (int initialTurn, int turnNumber){
 
 
 // Turning 180 degrees back home
-void turnHome(){
-  
+void turnHome(){  
   int turnsDiff = rightTurnsMsec - leftTurnsMsec;
   int iterations = 30 - turnsDiff / 60;
   
@@ -417,6 +437,7 @@ void turnHome(){
   }
   
   state = STATE_TURNED;
+  hasNewMessage = true;
   Serial.println("Turn Finished");
 }
 
@@ -429,6 +450,7 @@ void undockTarget(){
   leftTurnsMsec = 0;
   rightTurnsMsec = 0;
   state = STATE_SEARCHING_FIRST;
+  hasNewMessage = true;
   Serial.println("Undock Finished");
 }
 
@@ -489,6 +511,7 @@ void followBlackLine()
       }
       
       state = STATE_HOME;
+      hasNewMessage = true;
       firstLineCross = false;
       firstRightCross = false;
       firstLeftCross = false;
@@ -534,38 +557,51 @@ void followBlackLine()
 }
 
 void waitForCommands(){
-  WiFiClient client = server.available();   // listen for incoming clients
-
-  if (client) {                             // if you get a client,
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        if (c == '\n') {                    // if the byte is a newline character
-          if (currentLine.length() == 0) {  
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            client.print("<a href=\"/S\"> START MISSION </a>");
-            client.println();
-            break;         
-          } 
-          else {      // if you got a newline, then clear currentLine:
-            currentLine = "";
+  if (hasNewMessage){
+    WiFiClient client = server.available();   // listen for incoming clients
+  
+    if (client) {                             // if you get a client,
+      String currentLine = "";                // make a String to hold incoming data from the client
+      while (client.connected()) {            // loop while the client's connected
+        if (client.available()) {             // if there's bytes to read from the client,
+          char c = client.read();             // read a byte, then
+          if (c == '\n') {                    // if the byte is a newline character
+            if (currentLine.length() == 0) { 
+              hasNewMessage = false; 
+              client.println("HTTP/1.1 200 OK");
+              client.println("Content-type:text/html");
+              client.println("Connection: close");
+              client.println("Refresh: 1; url=/");
+              client.println();
+              client.println("<html>");
+              client.println("<head></head>");
+              client.println("<body>");
+              client.print("<p>State of mission is: ");
+              client.print(stateString());
+              client.println("</p>");
+              client.println("<a href=\"/S\"> START MISSION </a>");
+              client.println("</body>");
+              client.println();
+              break;         
+            } 
+            else {      // if you got a newline, then clear currentLine:
+              currentLine = "";
+            }
+          }     
+          else if (c != '\r') {    // if you got anything else but a carriage return character,
+            currentLine += c;      // add it to the end of the currentLine
           }
-        }     
-        else if (c != '\r') {    // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-
-        // Check to see if the client request was "GET /S" 
-        if (currentLine.endsWith("GET /S")) {
-          state = STATE_SEARCHING_FIRST;
+  
+          // Check to see if the client request was "GET /S" 
+          if (currentLine.endsWith("GET /S")) {
+            state = STATE_SEARCHING_FIRST;
+            hasNewMessage = true;
+          }        
         }
       }
+      // close the connection:
+      client.stop();
     }
-    // close the connection:
-    client.stop();
   }
 }
 
@@ -573,23 +609,27 @@ int ping = 180;
 
 void loop()
 { 
-  if (state == STATE_PRE_START) {
+  waitForCommands();
+  if (state == STATE_PRE_START){
+    hasNewMessage = true;
     waitForCommands();
   }
   else if (state == STATE_SEARCHING_FIRST) {
-    setRedLED();
-    
+   setRedLED();
    if(!findTargetBaseFirstStep()){
       if(findTargetBaseSecondStep()){
         state = STATE_FOUND_FIRST;
+        hasNewMessage = true;
       }
       else {
         halt(); // Target not found
         state = STATE_NOT_FOUND;
+        hasNewMessage = true;
       }
     }
     else {
-        state = STATE_FOUND_FIRST;
+      state = STATE_FOUND_FIRST;
+      hasNewMessage = true;
     }
   }
   else if (state == STATE_SEARCHING_SECOND) {
@@ -597,10 +637,12 @@ void loop()
     
     if(findTargetBaseSecondStep()){
       state = STATE_FOUND_SECOND;
+      hasNewMessage = true;
     }
     else {
       halt(); // Target not found
       state = STATE_NOT_FOUND;
+      hasNewMessage = true;
     }
   }
   else if (state == STATE_FOUND_FIRST){
@@ -641,9 +683,10 @@ void loop()
         goBackward(1000); 
       }
       state = STATE_PRE_START;  
+      hasNewMessage = true;
     }
   }
-  else if (state = STATE_NOT_FOUND){
+  else if (state == STATE_NOT_FOUND){
     hasMinion = false;
     turnHome();
     setRedBlinkLED();
