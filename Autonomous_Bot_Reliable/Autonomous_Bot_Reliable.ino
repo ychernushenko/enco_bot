@@ -23,12 +23,14 @@ const int MIDDLE_QTI_PIN = 18;
 const int LEFT_QTI_PIN = 19;
 
 const int STATE_PRE_START = -1;
-const int STATE_SEARCHING = 0;
-const int STATE_FOUND = 1;
+const int STATE_SEARCHING_FIRST = 0;
+const int STATE_FOUND_FIRST = 1;
 const int STATE_NOT_FOUND = 2;
 const int STATE_DOCKED = 3;
 const int STATE_TURNED = 4;
 const int STATE_HOME = 5;
+const int STATE_FOUND_SECOND = 6;
+const int STATE_SEARCHING_SECOND = 7;
 const int maxDistance = 65;
 
 int turnUndock = 0;
@@ -82,7 +84,7 @@ void setup() {
 //  server.begin();
  
 //  state = STATE_PRE_START;
-  state = STATE_SEARCHING;
+  state = STATE_SEARCHING_FIRST;
   servoLeft.attach(SERVO_LEFT_PIN);
   servoRight.attach(SERVO_RIGHT_PIN);
   halt();
@@ -142,7 +144,7 @@ int findTargetBaseSecondStep(){
 // -------------------------------------------------------------------------------------
 // Interrupt on press/release the switch
 void switchInterrupt(){
-  if (state==STATE_FOUND){
+  if ((state==STATE_FOUND_FIRST) || (state==STATE_FOUND_SECOND)) {
     state = STATE_DOCKED;
     halt();
   }
@@ -281,7 +283,7 @@ void scanningTurnLeft(){
 }
 
 // Going to target if lost, rescan
-void goToTarget() {
+void goToTargetFirst() {
   setGreenLED();
   int initialDistance = pingTarget();
   debug("Going to target");
@@ -300,8 +302,37 @@ void goToTarget() {
   if (pingTarget() > initialDistance) {
     halt();
     setRedLED();
-    if ((state != STATE_DOCKED) && !rescan(200, 20)){
-      if ((state != STATE_DOCKED) && !rescan(600, 50)) {
+    if ((state != STATE_DOCKED) && !rescan(350, 16)){
+      if ((state != STATE_DOCKED) && !rescan(500, 30)) {
+        state = STATE_SEARCHING_SECOND;
+      }
+    }
+  }
+}
+
+
+// Going to target if lost, rescan
+void goToTargetSecond() {
+  setGreenLED();
+  int initialDistance = pingTarget();
+  debug("Going to target");
+  if (initialDistance < 20){
+    setOffLED();
+    goForward(120);
+    setGreenLED();
+  }
+  else if (initialDistance < maxDistance){
+    setOffLED();
+    goForward(700);
+    setGreenLED();
+  }
+  //delay(30); //SHOULD BE CALIBRATED
+  
+  if (pingTarget() > initialDistance) {
+    halt();
+    setRedLED();
+    if ((state != STATE_DOCKED) && !rescan(350, 16)){
+      if ((state != STATE_DOCKED) && !rescan(500, 30)) {
         state = STATE_NOT_FOUND;
       }
     }
@@ -323,15 +354,8 @@ int rescan (int initialTurn, int turnNumber){
   int turnCounter = turnNumber;
   Serial.println("Test");
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
-    if (pingTarget() <= maxDistance){
+    if ((targetDistance =pingTarget()) <= maxDistance){
       halt();
-      int targetDistance1, targetDistance2, targetDistance3;
-      targetDistance1 = pingTarget();
-      targetDistance2 = pingTarget();
-      targetDistance3 = pingTarget();
-      if ((targetDistance1 <= maxDistance) && (targetDistance2 <= maxDistance) && (targetDistance3 <= maxDistance)) {
-        targetDistance = (targetDistance1 + targetDistance2 + targetDistance3)/3;
-      }
       slowScanningTurnLeft();
     }
     Serial.println(targetDistance);
@@ -391,7 +415,7 @@ void undockTarget(){
   turnLeft(1657 + turnUndock);
   leftTurnsMsec = 0;
   rightTurnsMsec = 0;
-  state = STATE_SEARCHING;
+  state = STATE_SEARCHING_FIRST;
   Serial.println("Undock Finished");
 }
 
@@ -535,7 +559,7 @@ void waitForCommands(){
 
         // Check to see if the client request was "GET /S" 
         if (currentLine.endsWith("GET /S")) {
-          state = STATE_SEARCHING;
+          state = STATE_SEARCHING_FIRST;
         }
       }
     }
@@ -560,12 +584,12 @@ void loop()
   if (state == STATE_PRE_START) {
     waitForCommands();
   }
-  else if (state == STATE_SEARCHING) {
+  else if (state == STATE_SEARCHING_FIRST) {
     setRedLED();
     
    if(!findTargetBaseFirstStep()){
       if(findTargetBaseSecondStep()){
-        state = STATE_FOUND;
+        state = STATE_FOUND_FIRST;
       }
       else {
         halt(); // Target not found
@@ -573,11 +597,25 @@ void loop()
       }
     }
     else {
-        state = STATE_FOUND;
+        state = STATE_FOUND_FIRST;
     }
   }
-  else if (state == STATE_FOUND){
-    goToTarget();
+  else if (state == STATE_SEARCHING_SECOND) {
+    setRedLED();
+    
+    if(findTargetBaseSecondStep()){
+      state = STATE_FOUND_SECOND;
+    }
+    else {
+      halt(); // Target not found
+      state = STATE_NOT_FOUND;
+    }
+  }
+  else if (state == STATE_FOUND_FIRST){
+    goToTargetFirst();
+  }
+  else if (state == STATE_FOUND_SECOND){
+    goToTargetSecond();
   }
   else if (state == STATE_DOCKED){
     setGreenLED();
