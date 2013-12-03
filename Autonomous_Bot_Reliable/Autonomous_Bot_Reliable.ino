@@ -5,8 +5,10 @@
 Servo servoLeft, servoRight;
 
 char ssid[] = "CMU"; //  your network SSID (name) 
-int wifiStatus = WL_IDLE_STATUS;
-WiFiServer server(50007);
+int status = WL_IDLE_STATUS;
+
+WiFiServer server(23);
+WiFiClient client;
 
 //Interface
 // Don't use this pins: 4, 7, 10, 11, 12, 13
@@ -82,29 +84,41 @@ char* stateString(){
 void setup() {
   Serial.begin(9600);
 
-/*  // check for the presence of the shield:
+  // check for the presence of the shield:
   if (WiFi.status() == WL_NO_SHIELD) {
     Serial.println("WiFi shield not present"); 
+    // don't continue:
     while(true);
   } 
-
+  
   // attempt to connect to Wifi network:
-  while (wifiStatus != WL_CONNECTED) { 
+  while ( status != WL_CONNECTED) { 
     Serial.print("Attempting to connect to SSID: ");
     Serial.println(ssid);
-    wifiStatus = WiFi.begin(ssid);
+    status = WiFi.begin(ssid);
+
+    // wait 1 seconds for connection:
+    delay(1000);
+  } 
+  // start the server:
+  server.begin();
+  // you're connected now, so print out the status:
+  printWifiStatus();
+
+  // wait for a new client:
+  client = server.available();
+  
+  while (!client) {
+    client = server.available();
   }
   
-  IPAddress ip = WiFi.localIP();
-  Serial.print("IP Address: ");
-  Serial.println(ip);
-  
-  server.begin();
- 
+  // clead out the input buffer:
+  client.flush();    
+  Serial.println("We have a new client");
+
+//  state = STATE_SEARCHING_FIRST;
   state = STATE_PRE_START;
-  hasNewMessage = true;
-*/
-  state = STATE_SEARCHING_FIRST;
+
   servoLeft.attach(SERVO_LEFT_PIN);
   servoRight.attach(SERVO_RIGHT_PIN);
   halt();
@@ -115,6 +129,41 @@ void setup() {
   pinMode(BLUE_PIN, OUTPUT);
 
   attachInterrupt(0, switchInterrupt, CHANGE);
+}
+
+void sendMessage(char* message){
+  if (client){
+      server.write(message);
+      server.write("\r\n");
+      Serial.println(message);
+  }
+}
+
+char getMessage(){
+  char thisChar = 'z';
+  
+  if (client.available() > 0) {
+      thisChar = client.read();
+  } 
+
+  return thisChar;
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
 }
 
 // -------------------------------------------------------------------------------------
@@ -573,63 +622,34 @@ void followBlackLine()
 }
 
 void waitForCommands(){
-  if (hasNewMessage){
-    WiFiClient client = server.available();   // listen for incoming clients
+  char message = getMessage();
   
-    if (client) {                             // if you get a client,
-      String currentLine = "";                // make a String to hold incoming data from the client
-      while (client.connected()) {            // loop while the client's connected
-        if (client.available()) {             // if there's bytes to read from the client,
-          char c = client.read();             // read a byte, then
-          if (c == '\n') {                    // if the byte is a newline character
-            if (currentLine.length() == 0) { 
-              hasNewMessage = false; 
-              client.println("HTTP/1.1 200 OK");
-              client.println("Content-type:text/html");
-              client.println("Connection: close");
-              client.println("Refresh: 1; url=/");
-              client.println();
-              client.println("<html>");
-              client.println("<head></head>");
-              client.println("<body>");
-              client.print("<p>State of mission is: ");
-              client.print(stateString());
-              client.println("</p>");
-              client.println("<a href=\"/S\"> START MISSION </a>");
-              client.println("</body>");
-              client.println();
-              break;         
-            } 
-            else {      // if you got a newline, then clear currentLine:
-              currentLine = "";
-            }
-          }     
-          else if (c != '\r') {    // if you got anything else but a carriage return character,
-            currentLine += c;      // add it to the end of the currentLine
-          }
-  
-          // Check to see if the client request was "GET /S" 
-          if (currentLine.endsWith("GET /S")) {
-            state = STATE_SEARCHING_FIRST;
-            hasNewMessage = true;
-          }        
-        }
-      }
-      // close the connection:
-      client.stop();
-    }
+  switch(message){
+    case 'z': break;
+    case 'S': 
+      debug("Start"); 
+      state = STATE_SEARCHING_FIRST;
+      break;
+    case 'R': 
+      debug("Resume"); 
+      state = STATE_SEARCHING_SECOND;
+      break;
+    default: break;
   }
 }
 
 int ping = 180;
 
 void loop()
-{ 
-  /*waitForCommands();
+{
+  if (hasNewMessage){
+    hasNewMessage = false;
+    sendMessage(stateString()); 
+  }
+  
   if (state == STATE_PRE_START){
-    hasNewMessage = true;
     waitForCommands();
-  }*/
+  }
   if (state == STATE_SEARCHING_FIRST) {
    setRedLED();
    if(!findTargetBaseFirstStep()){
