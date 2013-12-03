@@ -38,8 +38,8 @@ boolean hasMinion = false;
 boolean hasNewMessage = false;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
-const int BOUNDARY_QTI_THRESHOLD = 1100;
-const int MIDDLE_QTI_THRESHOLD = 1100;
+const int BOUNDARY_QTI_THRESHOLD = 750;
+const int MIDDLE_QTI_THRESHOLD = 800;
 
 int state;
 unsigned long startLineTime, endLineTime;
@@ -82,7 +82,7 @@ char* stateString(){
 void setup() {
   Serial.begin(9600);
 
-  // check for the presence of the shield:
+/*  // check for the presence of the shield:
   if (WiFi.status() == WL_NO_SHIELD) {
     Serial.println("WiFi shield not present"); 
     while(true);
@@ -103,8 +103,8 @@ void setup() {
  
   state = STATE_PRE_START;
   hasNewMessage = true;
-
-//  state = STATE_SEARCHING_FIRST;
+*/
+  state = STATE_SEARCHING_FIRST;
   servoLeft.attach(SERVO_LEFT_PIN);
   servoRight.attach(SERVO_RIGHT_PIN);
   halt();
@@ -397,7 +397,7 @@ int rescan (int initialTurn, int turnNumber){
   
   rescan_end_time = millis();
   rescan_time = rescan_end_time - rescan_start_time;
-  leftTurnsMsec += rescan_time * 0.7;
+  leftTurnsMsec += rescan_time * 0.85;
   
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
@@ -446,7 +446,12 @@ void undockTarget(){
   servoRight.write(180);
   delay(500);
   halt();
-  turnLeft(1657 + turnUndock);
+  if (turnUndock == 0){
+    turnLeft(1550);
+  }
+  else{
+    turnLeft(1657 + turnUndock);
+  }
   leftTurnsMsec = 0;
   rightTurnsMsec = 0;
   state = STATE_SEARCHING_FIRST;
@@ -496,19 +501,30 @@ void followBlackLine()
 
   if ((isRightBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
     ||(isLeftBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
-    ||(isRightBlack && isMiddleBlack && isLeftBlack && (timeDockedDelta > 8000)))
-  {
+    ||(isRightBlack && isMiddleBlack && isLeftBlack && (timeDockedDelta > 9500)))
+  { 
+      delay(50);
       debug("Stop");
       halt();
+      
+      rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
+      middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
+      leftQtiRCTime = RCTime(LEFT_QTI_PIN);
+      
       if(isRightBlack && isMiddleBlack && isLeftBlack) {
-        turnUndock = 0;
+        turnUndock = 0; 
       }
-      else if (firstRightCross){
+      else if (isLeftBlack){
         turnUndock = -477;
       }
-      else if (firstLeftCross){
+      else if (isRightBlack){
         turnUndock = 350;
       }
+      
+      debug(rightQtiRCTime);
+      debug(middleQtiRCTime);
+      debug(leftQtiRCTime);
+      debug(turnUndock);
       
       state = STATE_HOME;
       hasNewMessage = true;
@@ -609,12 +625,12 @@ int ping = 180;
 
 void loop()
 { 
-  waitForCommands();
+  /*waitForCommands();
   if (state == STATE_PRE_START){
     hasNewMessage = true;
     waitForCommands();
-  }
-  else if (state == STATE_SEARCHING_FIRST) {
+  }*/
+  if (state == STATE_SEARCHING_FIRST) {
    setRedLED();
    if(!findTargetBaseFirstStep()){
       if(findTargetBaseSecondStep()){
@@ -667,7 +683,7 @@ void loop()
     }
     else {
       if (turnUndock == 0){
-        turnLeft(1500);
+        turnLeft(1400);
         goBackward(1000);
       }
       else if (turnUndock > 0){
