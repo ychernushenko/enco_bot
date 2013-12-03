@@ -35,14 +35,15 @@ const int STATE_FOUND_SECOND = 6;
 const int STATE_SEARCHING_SECOND = 7;
 const int STATE_RESUME = 8;
 
-const int maxDistance = 65;
+const int maxDistance = 75;
 
 int turnUndock = 0;
 boolean hasNewMessage = false;
+boolean movingFirstTime = true;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
-const int BOUNDARY_QTI_THRESHOLD = 750;
-const int MIDDLE_QTI_THRESHOLD = 800;
+const int BOUNDARY_QTI_THRESHOLD = 1100;
+const int MIDDLE_QTI_THRESHOLD = 1100;
 
 int state;
 unsigned long startLineTime, endLineTime;
@@ -55,7 +56,7 @@ void sendMessage(char* message){
   if (client && message != prevMessage){
       server.write(message);
       server.write("\r\n");
-      Serial.println(message);
+//      Serial.println(message);
       prevMessage = message;
   }
 }
@@ -86,8 +87,8 @@ void debug(char* message){
 void debug(String message){
   char a[message.length()+1];
   message.toCharArray(a, message.length()+1);
-  sendMessage(a); 
-//  Serial.println(message);
+  //sendMessage(a); 
+  Serial.println(message);
 }
 
 char* stateString(){
@@ -110,7 +111,7 @@ char* stateString(){
 void setup() {
   Serial.begin(9600);
 
-  // check for the presence of the shield:
+/*  // check for the presence of the shield:
   if (WiFi.status() == WL_NO_SHIELD) {
     Serial.println("WiFi shield not present"); 
     // don't continue:
@@ -140,11 +141,15 @@ void setup() {
   
   // clead out the input buffer:
   client.flush();    
-  Serial.println("We have a new client");
+  Serial.println("We have a new client"); */
 
-  state = STATE_PRE_START;
+//  state = STATE_PRE_START;
 
-//  state = STATE_SEARCHING_FIRST;
+//  state = STATE_RESUME;
+
+  state = STATE_SEARCHING_FIRST;
+
+// state = STATE_TURNED;
   
 
   servoLeft.attach(SERVO_LEFT_PIN);
@@ -178,7 +183,14 @@ void printWifiStatus() {
 
 // Last version
 int startMovingToScan(){
-  goForward(5000);
+  if (movingFirstTime){
+    movingFirstTime = false;
+    goForward(5000);
+  }
+  else {
+    goForward(4000);
+  }
+  
   return findTargetInOneStep();
 }
 
@@ -209,7 +221,6 @@ void goToTarget(){
     goForward(700);
     setGreenLED();
   }
-  //delay(30); //SHOULD BE CALIBRATED
   
   if (pingTarget() > maxDistance) {
     halt();
@@ -223,51 +234,6 @@ void goToTarget(){
   }
 }
 
-// -------------------------------------------------------------------------------------
-// Go to the middle, and start scan
-int findTargetBaseFirstStep(){
-  int TargetFound = 0;
-  
-  debug("Scanning for Target from Base - Step 1");
-  
-  goForward(3600);
-  
-  if(turnUndock>0){
-    turnRight(90);
-  }
-  else if (turnUndock<0){
-    turnLeft(350);
-  }
-
-  return rescan(700, 37);
-}
-
-// -------------------------------------------------------------------------------------
-// If target was not found on the first step move forward and rescan
-int findTargetBaseSecondStep(){
-  int TargetFound = 0;
-  
-  debug("Scanning for Target from Base - Step 2");
-  
-  goForward(3100);
-  
- if ((state != STATE_DOCKED) && !rescan(700, 37)) {
-    if ((state != STATE_DOCKED) && !rescan(1000, 60)) {
-      state=STATE_NOT_FOUND;
-    }
-    else {
-      TargetFound = 1;
-    }
-  }
-  else{
-   TargetFound = 1;
-  }
-
-  return TargetFound;
-}
-
-
-// -------------------------------------------------------------------------------------
 // Interrupt on press/release the switch
 void switchInterrupt(){
   if ((state==STATE_FOUND_FIRST) || (state==STATE_FOUND_SECOND)) {
@@ -277,7 +243,6 @@ void switchInterrupt(){
     halt();
   }
 }
-
 
 int leftTurnsMsec = 0;
 int rightTurnsMsec = 0;
@@ -289,20 +254,17 @@ void slowScanningTurnLeft(){
 
 void turnRight(int msec){
   rightTurnsMsec += msec;
-  debug(rightTurnsMsec);
+//  debug(rightTurnsMsec);
   
   servoLeft.write(180);
   servoRight.write(180);
   delay(msec);
   halt();
-  
-//  Serial.println(rightTurnsMsec);
-//  delay(3000);
 }
 
 void turnLeft(int msec){
   leftTurnsMsec += msec;
-  debug(leftTurnsMsec);
+//  debug(leftTurnsMsec);
   
   servoLeft.write(0);
   servoRight.write(0);
@@ -327,16 +289,6 @@ void goBackward(int msec){
   servoRight.write(180);
   delay(msec);
   halt();
-}
-
-void goRight(){
-  servoLeft.write(180);
-  servoRight.write(85);
-}
-
-void goLeft(){
-  servoLeft.write(95);
-  servoRight.write(0);
 }
 
 void halt(){
@@ -410,75 +362,7 @@ void setRedBlinkLED() {
   delay(1000);
 }
 
-void scanningTurnRight(){
-  servoLeft.write(94);
-  servoRight.write(94);
-}
-
-void scanningTurnLeft(){
-  servoLeft.write(87);
-  servoRight.write(87);
-}
-
-// Going to target if lost, rescan
-void goToTargetFirst() {
-  setGreenLED();
-  int initialDistance = pingTarget();
-  debug("Going to target");
-  if (initialDistance < 20){
-    setOffLED();
-    goForward(120);
-    setGreenLED();
-  }
-  else if (initialDistance < maxDistance){
-    setOffLED();
-    goForward(700);
-    setGreenLED();
-  }
-  //delay(30); //SHOULD BE CALIBRATED
-  
-  if (pingTarget() > initialDistance) {
-    halt();
-    setRedLED();
-    if ((state != STATE_DOCKED) && !rescan(350, 16)){
-      if ((state != STATE_DOCKED) && !rescan(500, 30)) {
-        state = STATE_SEARCHING_SECOND;
-        hasNewMessage = true;
-      }
-    }
-  }
-}
-
-
-// Going to target if lost, rescan
-void goToTargetSecond() {
-  setGreenLED();
-  int initialDistance = pingTarget();
-  debug("Going to target");
-  if (initialDistance < 20){
-    setOffLED();
-    goForward(120);
-    setGreenLED();
-  }
-  else if (initialDistance < maxDistance){
-    setOffLED();
-    goForward(700);
-    setGreenLED();
-  }
-  //delay(30); //SHOULD BE CALIBRATED
-  
-  if (pingTarget() > initialDistance) {
-    halt();
-    setRedLED();
-    if ((state != STATE_DOCKED) && !rescan(350, 16)){
-      if ((state != STATE_DOCKED) && !rescan(500, 30)) {
-        state = STATE_NOT_FOUND;
-        hasNewMessage = true;
-      }
-    }
-  }
-}
-
+// ------------------------------------------------------------------------------
 int rescan (int initialTurn, int turnNumber){
   unsigned long rescan_start_time, rescan_end_time, rescan_time;
   
@@ -490,34 +374,35 @@ int rescan (int initialTurn, int turnNumber){
 
   int minDistance = 3; //cm SHOULD BE CALIBRATED
   int targetDistance = maxDistance + 1;
+  slowScanningTurnLeft();
   
   int turnCounter = turnNumber;
   while ((targetDistance > maxDistance || targetDistance < minDistance) && (turnCounter>0)) {
-    if ((targetDistance =pingTarget()) <= maxDistance){
+    targetDistance = pingTarget();
+    if (targetDistance <= maxDistance){
       halt();
-      slowScanningTurnLeft();
+      break;
     }
-//    debug(targetDistance);
     delay(20);
-    slowScanningTurnLeft();
     turnCounter--;
   }
   
   rescan_end_time = millis();
   rescan_time = rescan_end_time - rescan_start_time;
-  leftTurnsMsec += rescan_time * 0.7;
+  leftTurnsMsec += rescan_time * 0.5;
   
   if (targetDistance <= maxDistance && targetDistance >= minDistance){
     TargetFound = 1;
     if(targetDistance < 20) {
       turnLeft(110);
     }
-    else if (targetDistance < minDistance){
-      goForward(650);
-    }
     else {
-      turnLeft(130);
+      turnLeft(170);
+      goForward(1000);
     }
+  }
+  else if (targetDistance < minDistance){
+    goForward(650);
   }
   else {
     turnRight(initialTurn);
@@ -526,7 +411,7 @@ int rescan (int initialTurn, int turnNumber){
   return TargetFound;
 }
 
-
+// ------------------------------------------------------------------------------
 // Turning 180 degrees back home
 void turnHome(){  
   int turnsDiff = rightTurnsMsec - leftTurnsMsec;
@@ -536,7 +421,7 @@ void turnHome(){
     
   for (int i=0; i<iterations; i++){
     goForward();
-    delay(20);
+    delay(22);
     turnRight(90);
   }
   
@@ -545,13 +430,14 @@ void turnHome(){
   debug("Turn Finished");
 }
 
+// ------------------------------------------------------------------------------
 void undockTarget(){
   servoLeft.write(0);
   servoRight.write(180);
   delay(500);
   halt();
   if (turnUndock == 0){
-    turnLeft(1550);
+    turnLeft(1450);
   }
   else{
     turnLeft(1657 + turnUndock);
@@ -563,6 +449,7 @@ void undockTarget(){
   debug("Undock Finished");
 }
 
+// ------------------------------------------------------------------------------
 // Return time http://learn.parallax.com/KickStart/555-27401
 long RCTime(int sensorIn){
   long duration = 0;
@@ -581,6 +468,7 @@ boolean firstLineCross = false;
 boolean firstRightCross = false;
 boolean firstLeftCross = false;
 
+// ------------------------------------------------------------------------------
 // Following the black line
 void followBlackLine()
 {  
@@ -605,41 +493,35 @@ void followBlackLine()
 
   if ((isRightBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
     ||(isLeftBlack && isMiddleBlack && firstLineCross && (timeLineDelta > 2000))
-    ||(isRightBlack && isMiddleBlack && isLeftBlack && (timeDockedDelta > 9500)))
+    ||(isRightBlack && isMiddleBlack && isLeftBlack && (timeDockedDelta > 7000)))
   { 
-      delay(100);
-      debug("Stop");
-      halt();
-      
-      rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
-      middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
-      leftQtiRCTime = RCTime(LEFT_QTI_PIN);
-      
-      isRightBlack = rightQtiRCTime > BOUNDARY_QTI_THRESHOLD;
-      isMiddleBlack = middleQtiRCTime > MIDDLE_QTI_THRESHOLD;
-      isLeftBlack = leftQtiRCTime > BOUNDARY_QTI_THRESHOLD;
+    delay(50);
+    halt();
+    rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
+    leftQtiRCTime = RCTime(LEFT_QTI_PIN);
+    middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
 
+    isRightBlack = rightQtiRCTime > BOUNDARY_QTI_THRESHOLD;
+    isMiddleBlack = middleQtiRCTime > MIDDLE_QTI_THRESHOLD;
+    isLeftBlack = leftQtiRCTime > BOUNDARY_QTI_THRESHOLD;
       
-      if(isRightBlack && isMiddleBlack && isLeftBlack) {
-        turnUndock = 0; 
-      }
-      else if (isLeftBlack){
-        turnUndock = -477;
-      }
-      else if (isRightBlack){
-        turnUndock = 350;
-      }
-      
-      debug(rightQtiRCTime);
-      debug(middleQtiRCTime);
-      debug(leftQtiRCTime);
-      debug(turnUndock);
-      
-      state = STATE_HOME;
-      hasNewMessage = true;
-      firstLineCross = false;
-      firstRightCross = false;
-      firstLeftCross = false;
+    if (isRightBlack && isMiddleBlack && isLeftBlack){
+      turnUndock = 0;
+    }
+    else if (isRightBlack){
+      turnUndock = 250;
+    } 
+    else if (isLeftBlack){
+      turnUndock = -477;
+    } 
+
+    halt();
+    
+    state = STATE_HOME;
+    hasNewMessage = true;
+    firstLineCross = false;
+    firstRightCross = false;
+    firstLeftCross = false;
   }
   else if (isRightBlack && !isLeftBlack)
   {
@@ -648,7 +530,7 @@ void followBlackLine()
       startLineTime = millis();
       firstRightCross = true;
     }
-    debug("Right");  
+//    debug("Right");  
     servoLeft.write(180);
     servoRight.write(90);
   }
@@ -659,7 +541,7 @@ void followBlackLine()
       startLineTime = millis();
       firstLeftCross = true;
     }
-    debug("Left");
+//    debug("Left");
     servoLeft.write(90);
     servoRight.write(0);
   }
@@ -669,7 +551,7 @@ void followBlackLine()
       firstLineCross = true;
       startLineTime = millis();
     }
-    debug("Middle");
+//    debug("Middle");
   }
   else 
   {
@@ -680,6 +562,7 @@ void followBlackLine()
   delay(50);
 }
 
+// ------------------------------------------------------------------------------
 void waitForCommands(){
   char message = getMessage();
   
@@ -692,6 +575,8 @@ void waitForCommands(){
       break;
     case 'R': 
       debug("Resume"); 
+      leftTurnsMsec = 0;
+      rightTurnsMsec = 0;
       hasNewMessage = true;
       state = STATE_RESUME;
       break;
@@ -700,76 +585,30 @@ void waitForCommands(){
 }
 
 int ping = 180;
-/*
-void loop()
+
+
+/*void loop()
 {
-  if (hasNewMessage){
-    hasNewMessage = false;
-    sendMessage(stateString()); 
-  }
+      servoLeft.write(98);
+      servoRight.write(82);
   
-  if (state == STATE_PRE_START){
-    waitForCommands();
-  }
-  if (state == STATE_SEARCHING_FIRST) {
-   setRedLED();
-   if(!findTargetBaseFirstStep()){
-      if(findTargetBaseSecondStep()){
-        state = STATE_FOUND_FIRST;
-        hasNewMessage = true;
-      }
-      else {
-        halt(); // Target not found
-        state = STATE_NOT_FOUND;
-        hasNewMessage = true;
-      }
-    }
-    else {
-      state = STATE_FOUND_FIRST;
-      hasNewMessage = true;
-    }
-  }
-  else if (state == STATE_SEARCHING_SECOND) {
-    setRedLED();
-    
-    if(findTargetBaseSecondStep()){
-      state = STATE_FOUND_SECOND;
-      hasNewMessage = true;
-    }
-    else {
-      halt(); // Target not found
-      state = STATE_NOT_FOUND;
-      hasNewMessage = true;
-    }
-  }
-  else if (state == STATE_FOUND_FIRST){
-    goToTargetFirst();
-  }
-  else if (state == STATE_FOUND_SECOND){
-    goToTargetSecond();
-  }
-  else if (state == STATE_DOCKED){
-    setGreenLED();
-    turnHome();
-  }
-  else if (state == STATE_TURNED){
- //   debug("Going Home");
-    followBlackLine();
-  }
-  else if (state == STATE_HOME){
-    debug("Leave Target at Home");
-    undockTarget();
-    state = STATE_SEARCHING_FIRST;
-  }
-  else if (state == STATE_NOT_FOUND){
-    hasMinion = false;
-    turnHome();
-    setRedBlinkLED();
-  }
+      int rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
+      int middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
+      int leftQtiRCTime = RCTime(LEFT_QTI_PIN);
+            
+      debug("-------------");
+      debug(rightQtiRCTime);
+      debug(middleQtiRCTime);
+      debug(leftQtiRCTime);  
+      
+      delay(1000);
 }*/
 
+// ------------------------------------------------------------------------------
 void loop()
 {
+ // debug(state);
+  
   if (hasNewMessage){
     hasNewMessage = false;
     sendMessage(stateString()); 
