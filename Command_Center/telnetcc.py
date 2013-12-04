@@ -6,7 +6,7 @@ import threading
 import Queue
 import datetime
 
-HOST = "128.237.249.100"
+HOST = "128.237.243.105"
 tn = telnetlib.Telnet(HOST)
 
 
@@ -20,7 +20,7 @@ class GuiPart:
         while self.queue.qsize():
             try:
                 msg = self.queue.get(0)
-                if msg and msg != self.prevMsg and  msg != "\n" :
+                if msg and msg != self.prevMsg and  msg != "\n" :                               
                     if msg == 'No minion found. Going to pause state':
                         self.app.resumeButton['state'] = 'enabled'
                     self.app.addMessage(msg)
@@ -45,7 +45,7 @@ class CommandCenterGUI(Frame):
         self.startButton = Button(self, text="Start", command=self.startMission)
         self.startButton.grid(row=0, column=1, sticky=N+S+E+W)
 
-        self.resumeButton = Button(self, text="Resume", state=DISABLED,
+        self.resumeButton = Button(self, text="Resume",
                               command=self.resumeMission)
         self.resumeButton.grid(row=0, column=2, sticky=N+S+E+W)
 
@@ -58,7 +58,7 @@ class CommandCenterGUI(Frame):
         tn.write('S')
 
     def resumeMission(self):
-        self.resumeButton['state'] = 'disabled'
+        #self.resumeButton['state'] = 'disabled'
         tn.write('R')
 
     def addMessage(self, data):

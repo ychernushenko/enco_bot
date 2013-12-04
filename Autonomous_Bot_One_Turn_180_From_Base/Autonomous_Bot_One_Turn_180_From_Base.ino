@@ -39,7 +39,7 @@ const int maxDistance = 75;
 
 int turnUndock = 0;
 boolean hasNewMessage = false;
-boolean movingFirstTime = true;
+boolean movingFirstTime = false;
 
 // These are the values, when we assume that underneath a QTI sensor is a black surface.
 const int BOUNDARY_QTI_THRESHOLD = 1100;
@@ -56,7 +56,7 @@ void sendMessage(char* message){
   if (client && message != prevMessage){
       server.write(message);
       server.write("\r\n");
-      Serial.println(message);
+//      Serial.println(message);
       prevMessage = message;
   }
 }
@@ -102,7 +102,6 @@ char* stateString(){
     case STATE_HOME: return "Minion delivered"; break;
     case STATE_FOUND_SECOND: return "Minion found"; break;
     case STATE_SEARCHING_SECOND: return "Searching for a minion"; break;
-    case STATE_RESUME: return "Resuming search"; break;
   default: return "ERROR!";  
 }
 }
@@ -112,7 +111,7 @@ char* stateString(){
 void setup() {
   Serial.begin(9600);
 
-  // check for the presence of the shield:
+/*  // check for the presence of the shield:
   if (WiFi.status() == WL_NO_SHIELD) {
     Serial.println("WiFi shield not present"); 
     // don't continue:
@@ -132,8 +131,6 @@ void setup() {
   server.begin();
   // you're connected now, so print out the status:
   printWifiStatus();
-  
-  setBlueLED();
 
   // wait for a new client:
   client = server.available();
@@ -144,15 +141,15 @@ void setup() {
   
   // clead out the input buffer:
   client.flush();    
-  Serial.println("We have a new client");
+  Serial.println("We have a new client"); */
 
-  state = STATE_PRE_START;
+//  state = STATE_PRE_START;
 
 //  state = STATE_RESUME;
 
 //  state = STATE_SEARCHING_FIRST;
 
-// state = STATE_TURNED;
+ state = STATE_TURNED;
   
 
   servoLeft.attach(SERVO_LEFT_PIN);
@@ -192,6 +189,29 @@ int startMovingToScan(){
   }
   else {
     goForward(4000);
+    
+    turnLeft(300);
+    if (RCTime(LEFT_QTI_PIN) > BOUNDARY_QTI_THRESHOLD){
+      turnLeft(1200);
+      goForward(3200);
+      turnLeft(700);  
+      debug("Left");
+    }
+    else{
+      turnRight(600);
+      if (RCTime(RIGHT_QTI_PIN) > BOUNDARY_QTI_THRESHOLD){
+        turnRight(120); 
+        goForward(3200);
+        turnRight(700);  
+        debug("Right");
+      }
+      else{
+        turnRight(300);
+        debug("Center");  
+      }
+    }
+    
+    delay(2000);
   }
   
   return findTargetInOneStep();
@@ -341,13 +361,6 @@ void setRedLED() {
   digitalWrite(BLUE_PIN, LOW);
 }
 
-// Network connected
-void setBlueLED() {
-  digitalWrite(RED_PIN, LOW);
-  digitalWrite(GREEN_PIN, LOW);
-  digitalWrite(BLUE_PIN, HIGH);
-}
-
 // LED - Target found, blink - Go to Target
 void setGreenLED() {
   digitalWrite(RED_PIN, LOW);
@@ -446,12 +459,14 @@ void undockTarget(){
   servoRight.write(180);
   delay(500);
   halt();
-  if (turnUndock == 0){
+  /*if (turnUndock == 0){
     turnLeft(1450);
   }
   else{
     turnLeft(1657 + turnUndock);
-  }
+  }*/
+  turnLeft(1450);
+  
   leftTurnsMsec = 0;
   rightTurnsMsec = 0;
   state = STATE_SEARCHING_FIRST;
@@ -540,7 +555,6 @@ void followBlackLine()
       startLineTime = millis();
       firstRightCross = true;
     }
-//    debug("Right");  
     servoLeft.write(180);
     servoRight.write(90);
   }
@@ -551,7 +565,6 @@ void followBlackLine()
       startLineTime = millis();
       firstLeftCross = true;
     }
-//    debug("Left");
     servoLeft.write(90);
     servoRight.write(0);
   }
@@ -561,7 +574,6 @@ void followBlackLine()
       firstLineCross = true;
       startLineTime = millis();
     }
-//    debug("Middle");
   }
   else 
   {
@@ -614,20 +626,11 @@ int ping = 180;
       delay(1000);
 }*/
 
-// ------------------------------------------------------------------------------
-
-/*void loop(){
-  int rightQtiRCTime = RCTime(RIGHT_QTI_PIN);
-  int middleQtiRCTime = RCTime(MIDDLE_QTI_PIN);
-  int leftQtiRCTime = RCTime(LEFT_QTI_PIN);
+void recognizeLines(){
   
-  debug(rightQtiRCTime);
-  debug(middleQtiRCTime);
-  debug(leftQtiRCTime);
-  
-  delay(1000);
 }
-*/
+
+// ------------------------------------------------------------------------------
 void loop()
 {
  // debug(state);
